@@ -11,8 +11,9 @@ Shell config and global AI agent instructions for WSL/Linux, set up via `install
 
 - `install.sh` — Installer; `--bash`, `--ai`, `--tools`, plus `--dry-run` and `--uninstall` (`-h` for help). Idempotent, and backs up anything it replaces.
 - `bash/loader.sh` — Sourced from `~/.bashrc`; puts `bin/` on PATH, loads every `bash/libs/*.sh` in order, then `~/.bashrc.local` if present.
-- `bash/libs/` — Shell functions and aliases, including venv auto-activate and `dotfiles update`.
-- `bin/` — Standalone scripts: `gclean`, `tolf`, `gi`, `note`, `mkvenv`.
+- `bash/libs/` — Shell functions and aliases, including venv auto-activate, `dotfiles update` and tab completion.
+- `bin/` — Standalone scripts: `gclean`, `tolf`, `gi`, `note`, `notes`, `mkvenv`.
+- `lib/` — Helpers sourced by `bin/` scripts (not on PATH).
 - `tools.txt` — CLI tools to install, by package manager.
 - `ai/AGENTS.md` — Global agent rules, linked into Claude Code, Goose and Cursor by `--ai`.
 

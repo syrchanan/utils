@@ -25,8 +25,10 @@ every step is idempotent and backs up anything it would replace; uninstall leave
   - `10_tools.sh` — `help`, `dotfiles update` (pull this repo, reload)
   - `20_alias.sh` — aliases; OS-specific ones (`here`, `resu`) only where their command exists; `ll`/`fd`/`bat`/`py` adapt to installed tools
   - `30_env.sh` — `JULIA_PROJECT=@.` and venv auto-activate
+  - `40_complete.sh` — tab completion for `note` / `notes` (commands, options, nested topics, `#tags` already used)
 - `bash/.bashrc.local.example` — template for machine-only settings and secrets (never committed)
 - `bin/` — standalone scripts, on PATH; each takes `-h`
+- `lib/` — helpers sourced by `bin/` scripts (`notes.sh`: date specs, topic checks); not on PATH
 - `gitignore/` — templates used by `gi`
 - `tools.txt` — CLI tools by package manager (apt, choco)
 - `ai/AGENTS.md` — global agent rules, the single source for every agent
@@ -38,7 +40,8 @@ every step is idempotent and backs up anything it would replace; uninstall leave
 | `gclean [--yes]` | delete local branches whose remote is gone, and their worktrees (dirty worktrees are kept) |
 | `tolf [--yes] [path...]` | convert CRLF to LF, recursively; skips `.git` and binary files |
 | `gi [-l] [--stdout] [name...]` | append `.gitignore` templates (default: python r julia node quarto); safe to rerun |
-| `note [-t topic] [-d dir] [text]` | append a timestamped note to `$NOTES_DIR/[topic/]YYYY-MM-DD.md`; no text opens `$EDITOR` |
+| `note [-t topic] [-D when] [-T HH:MM] [-x] [-u] [text]` | append a timestamped note to `$NOTES_DIR/[topic/]YYYY-MM-DD.md`; topics nest (`work/clientA`); `-x` todo, `-D` another day, `-T` set the time, `-u` undo last; no text opens `$EDITOR` |
+| `notes [command] [-s/-u when] [-t topic] [--md\|--tsv]` | read notes: `today` (default), `show <when>`, `grep <pattern>`, `topics`, `recap [-n N]`, `tags`, `todo [-a]` (with ages), `done`/`undone <pattern>` (tick a todo's box), `help [command]`; long output pages through `less` (`NOTES_PAGER`) |
 | `mkvenv` | `uv venv`, then `uv sync` or `uv pip install -r requirements.txt` |
 
 `gclean` and `tolf` are dry runs unless given `--yes`.
