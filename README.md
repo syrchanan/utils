@@ -7,35 +7,13 @@ The devcontainer supports Python, R, and Julia for multi-language AI development
 ## Contents
 
 ### `dotfiles/`
-Shell config and global AI agent instructions for WSL/Linux, set up via `install.sh`.
-
-- `install.sh` — Installer; `--bash`, `--ai`, `--tools`, plus `--dry-run` and `--uninstall` (`-h` for help). Idempotent, and backs up anything it replaces.
-- `bash/loader.sh` — Sourced from `~/.bashrc`; puts `bin/` on PATH, loads every `bash/libs/*.sh` in order, then `~/.bashrc.local` if present.
-- `bash/libs/` — Shell functions and aliases, including venv auto-activate, `dotfiles update` and tab completion.
-- `bin/` — Standalone scripts: `gclean`, `tolf`, `gi`, `note`, `notes`, `mkvenv`.
-- `lib/` — Helpers sourced by `bin/` scripts (not on PATH).
-- `tools.txt` — CLI tools to install, by package manager.
-- `ai/AGENTS.md` — Global agent rules, linked into Claude Code, Goose and Cursor by `--ai`.
-
-See [Dotfiles README](./dotfiles/README.md) for usage.
+Shell config, scripts and global AI agent instructions for WSL/Linux. `install.sh` sets them up (`-h` for options, `--dry-run` to preview); every step is idempotent and backs up anything it replaces. Once installed, `dotfiles list` shows every script, alias and function it adds. See the [Dotfiles README](./dotfiles/README.md).
 
 ### `.devcontainer/`
-
-Development container configurations for Python, R, Julia, and AI tooling.
-
-- `Dockerfile` — Reproducible dev environment with Python, R, Julia (via juliaup), optional Goose and Claude Code CLIs, and common CLI tools. Includes user setup and shell configuration.
-- `devcontainer.json` — VS Code/Positron devcontainer configuration, extensions, and environment settings for Python, R, Julia, and Goose development.
-- `poststart.sh` — Post-start script to auto-install detected Python, R, and Julia dependencies for all projects in the workspace (see below for file targets).
-- `config.json` — Toggles for languages and platforms (Goose, Claude Code, etc.); all default to off.
-
-See [Devcontainer README](./.devcontainer/README.md) for more details.
+A reproducible dev container for Python, R and Julia, with optional Goose and Claude Code CLIs. Languages and tools are opt-in via `config.json` (all off by default), and on start it installs the dependencies it detects in workspace projects. See the [Devcontainer README](./.devcontainer/README.md).
 
 ### `ralph/`
-Agent workflow scripts and Goose recipes for iterative, cross-model development. Based on the [tutorial at goose](https://block.github.io/goose/docs/tutorials/ralph-loop).
-
-- `ralph-loop.sh` — Bash script to run the Ralph Loop (multi-model, iterative agent workflow with review and feedback).
-- `ralph-work.yaml` — Goose recipe for the work phase (single iteration, fresh context, state via files).
-- `ralph-review.yaml` — Goose recipe for the review phase (cross-model review, SHIP/REVISE decision).
+Agent workflow scripts and Goose recipes for iterative, cross-model development, based on the [tutorial at goose](https://block.github.io/goose/docs/tutorials/ralph-loop).
 
 #### Ralph Loop
 

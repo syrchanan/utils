@@ -18,20 +18,18 @@ run install.sh to set things up; with no flags it installs `--bash` and `--ai`
 
 every step is idempotent and backs up anything it would replace; uninstall leaves the backups in place
 
-## layout
+## how it loads
 
-- `bash/loader.sh` — sourced from `~/.bashrc`; exports `DOTFILES_DIR`, puts `bin/` on PATH, sources `bash/libs/*.sh` in order, then `~/.bashrc.local`
-- `bash/libs/` — shell functions and aliases (things that must change the current shell)
-  - `10_tools.sh` — `help`, `dotfiles update` (pull this repo, reload)
-  - `20_alias.sh` — aliases; OS-specific ones (`here`, `resu`) only where their command exists; `ll`/`fd`/`bat`/`py` adapt to installed tools
-  - `30_env.sh` — `JULIA_PROJECT=@.` and venv auto-activate
-  - `40_complete.sh` — tab completion for `note` / `notes` (commands, options, nested topics, `#tags` already used)
-- `bash/.bashrc.local.example` — template for machine-only settings and secrets (never committed)
-- `bin/` — standalone scripts, on PATH; each takes `-h`
-- `lib/` — helpers sourced by `bin/` scripts (`notes.sh`: date specs, topic checks); not on PATH
-- `gitignore/` — templates used by `gi`
-- `tools.txt` — CLI tools by package manager (apt, choco)
-- `ai/AGENTS.md` — global agent rules, the single source for every agent
+`~/.bashrc` sources `bash/loader.sh`, which exports `DOTFILES_DIR`, puts `bin/` on PATH, sources `bash/libs/*.sh` in filename order (the number prefixes set the order), and sources `~/.bashrc.local` last, so machine-only settings and secrets there override everything else. Start that file from `bash/.bashrc.local.example`; it is never committed.
+
+`dotfiles list [regex]` shows every script, alias and function this adds (including `~/.bashrc.local`), and whether each alias is set in the current shell: some only exist where their tool does (`here`, `resu`, eza's `ll`, Debian's `fd`/`bat`). `dotfiles update` pulls this repo and reloads.
+
+## adding things
+
+- something that must change the current shell (alias, function, env var): `bash/libs/`
+- anything else: an executable script in `bin/`; make its second line a `# description` comment (shown by `dotfiles list`) and give it `-h`
+- code shared by `bin/` scripts: `lib/`, which is sourced, not on PATH
+- a CLI tool to install: `tools.txt`, read by `--tools`
 
 ## scripts (`bin/`)
 

@@ -54,6 +54,11 @@ run() {
 	fi
 }
 
+# past-tense results ("Linked ...") are only true on a real run; dry runs already print [dry-run] lines
+say() {
+	[ "$DRY_RUN" -eq 1 ] || echo "$@"
+}
+
 # --- bash ---
 
 install_bash() {
@@ -82,7 +87,7 @@ $MARKER_START
 $MARKER_END
 EOF
 	fi
-	echo "Backed up $bashrc and added dotfiles loader."
+	say "Backed up $bashrc and added dotfiles loader."
 }
 
 uninstall_bash() {
@@ -103,7 +108,7 @@ uninstall_bash() {
 		cat "$tmp" > "$bashrc"
 		rm -f "$tmp"
 	fi
-	echo "Removed dotfiles loader from $bashrc (backup: ${bashrc}.bak.$STAMP)"
+	say "Removed dotfiles loader from $bashrc (backup: ${bashrc}.bak.$STAMP)"
 }
 
 # --- ai ---
@@ -122,7 +127,7 @@ backup_if_present() {
 	local dst="$1"
 	if [ -e "$dst" ] || [ -L "$dst" ]; then
 		run mv "$dst" "${dst}.bak.$STAMP"
-		echo "Backed up existing $dst"
+		say "Backed up existing $dst"
 	fi
 }
 
@@ -136,7 +141,7 @@ link_file() {
 	run mkdir -p "$(dirname "$dst")"
 	backup_if_present "$dst"
 	run ln -s "$src" "$dst"
-	echo "Linked $dst -> $src"
+	say "Linked $dst -> $src"
 }
 
 write_cursor_rule() {
@@ -153,7 +158,7 @@ write_cursor_rule() {
 			cat "$AGENTS_SRC"
 		} > "$CURSOR_RULE"
 	fi
-	echo "Wrote $CURSOR_RULE"
+	say "Wrote $CURSOR_RULE"
 }
 
 install_ai() {
@@ -174,12 +179,12 @@ uninstall_ai() {
 		# only remove links that point into this repo
 		if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$AGENTS_SRC" ]; then
 			run rm "$dst"
-			echo "Removed link $dst"
+			say "Removed link $dst"
 		fi
 	done
 	if [ -f "$CURSOR_RULE" ] && grep -Fq "$CURSOR_TAG" "$CURSOR_RULE"; then
 		run rm "$CURSOR_RULE"
-		echo "Removed $CURSOR_RULE"
+		say "Removed $CURSOR_RULE"
 	fi
 }
 
@@ -198,7 +203,7 @@ install_tools() {
 		[ "$apt" != "-" ] && pkgs+=("$apt")
 	done < "$manifest"
 
-	echo "Installing: ${pkgs[*]}"
+	if [ "$DRY_RUN" -eq 1 ]; then echo "Would install: ${pkgs[*]}"; else echo "Installing: ${pkgs[*]}"; fi
 	run sudo apt-get update
 	run sudo apt-get install -y "${pkgs[@]}"
 	if ! command -v uv >/dev/null 2>&1; then
@@ -212,8 +217,12 @@ if [ "$UNINSTALL" -eq 1 ]; then
 	[ "$DO_BASH" -eq 1 ] && uninstall_bash
 	[ "$DO_AI" -eq 1 ] && uninstall_ai
 	[ "$DO_TOOLS" -eq 1 ] && echo "--tools uninstall is not supported; remove packages with apt."
-	echo "Backups (*.bak.*) were left in place."
-	echo "Done!"
+	if [ "$DRY_RUN" -eq 1 ]; then
+		echo "Dry run: nothing was changed."
+	else
+		echo "Backups (*.bak.*) were left in place."
+		echo "Done!"
+	fi
 	exit 0
 fi
 
@@ -221,6 +230,10 @@ fi
 [ "$DO_AI" -eq 1 ] && install_ai
 [ "$DO_TOOLS" -eq 1 ] && install_tools
 
+if [ "$DRY_RUN" -eq 1 ]; then
+	echo "Dry run: nothing was changed."
+	exit 0
+fi
 echo "Done!"
 if [ "$DO_BASH" -eq 1 ]; then
 	echo "Run 'source ~/.bashrc' to apply your config."

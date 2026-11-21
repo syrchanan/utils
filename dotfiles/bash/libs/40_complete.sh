@@ -1,4 +1,4 @@
-# tab completion for bin/ scripts
+# tab completion for bin/ scripts and the dotfiles command
 
 _NOTES_COMMANDS="today show grep topics recap tags todo done undone help"
 
@@ -89,8 +89,20 @@ _notes_complete() {
 	fi
 }
 
+# dotfiles: subcommands, then for "list" the names it would show
+_dotfiles_complete() {
+	local cur="${COMP_WORDS[COMP_CWORD]}"
+	COMPREPLY=()
+	if [ "$COMP_CWORD" -eq 1 ]; then
+		mapfile -t COMPREPLY < <(compgen -W "update list help" -- "$cur")
+	elif [ "$COMP_CWORD" -eq 2 ] && [ "${COMP_WORDS[1]}" = list ]; then
+		mapfile -t COMPREPLY < <(compgen -W "$(_dotfiles_rows 2>/dev/null | cut -f2)" -- "$cur")
+	fi
+}
+
 if command -v complete >/dev/null 2>&1; then
 	complete -F _notes_complete note notes
+	complete -F _dotfiles_complete dotfiles
 fi
 
 # keep the file's exit status clean when the last guard is false
