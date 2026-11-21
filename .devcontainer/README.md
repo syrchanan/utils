@@ -1,13 +1,6 @@
 # Devcontainer Setup Documentation
 
-This folder contains files, configuration, and scripts for the development container (devcontainer) experience for this project.
-
-## Key Files
-
-- `Dockerfile`: Main build script for the development environment; supports modular installation of Python, R, Julia, Goose, and other tools.
-- `devcontainer.json`: VS Code-specific configuration. Controls workspace folder, extensions, user environment, ports, and post-start automation.
-- `config.json`: Tuning file for enabling/disabling languages or tools in the build.
-- `poststart.sh`: Startup script for auto-installing dependencies when the container is first opened.
+This folder contains files, configuration, and scripts for the development container (devcontainer) experience for this project. Languages and tools are switched on in `config.json`; on first open, `poststart.sh` installs the dependencies it detects in workspace projects.
 
 ---
 

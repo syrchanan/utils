@@ -28,4 +28,5 @@
 - Never read, echo, or commit `.env` files or any other secret.
 - Never install new global packages or modify system-level configurations.
 - Never go through any one-way doors; ensure that whatever you do is undo-able.
+- Never write file trees in documentation, that information is the same as running `ls` and therefore adds nothing.
 

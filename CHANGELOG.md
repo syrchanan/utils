@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-11-21
+### Added
+- `dotfiles/bash/libs/10_tools.sh`: `dotfiles list [regex]` lists every script in `bin/` (with the description from its header comment), every alias and function from `bash/libs/` and `~/.bashrc.local` (aliases show their current value, or that they are not set in this shell), filtered by a regex on name or description (smart case). `dotfiles -h` / `--help` prints usage.
+- `dotfiles/bash/libs/40_complete.sh`: completion for `dotfiles` subcommands and the names `dotfiles list` shows.
+- `dotfiles/ai/AGENTS.md`: rule against file trees in documentation.
+
+### Changed
+- `README.md`, `dotfiles/README.md`, `.devcontainer/README.md`: removed file-by-file listings, per the new rule; kept what a listing can't show (how the loader orders and overrides things, where new scripts, aliases and tools go) and pointed to `dotfiles list`.
+
+### Fixed
+- `dotfiles/install.sh`: `--dry-run` no longer prints past-tense results ("Linked …", "Wrote …", "Done!") for changes it didn't make; it prints only the `[dry-run]` lines and ends with "Dry run: nothing was changed." `--tools --dry-run` says "Would install" instead of "Installing".
+
 ## [0.4.1] - 2026-11-21
 ### Added
 - `dotfiles/bin/notes`: read notes written by `note`. Commands: `today` (default), `show <when>`, `grep <pattern>` (smart case, whole multi-line notes), `topics` (tree with counts), `recap [-n N]` (last N days, default 2), `tags` (`#tag` counts), `todo [-a]`, `done <pattern>` / `undone <pattern>` (mark the single matching todo `[x]` or back to `[ ]`; lists candidates with `--line file:line` when several match), `help [command]`. Filters `-s`/`-u`/`-t`; `--md` (markdown lists and tables, for pasting) and `--tsv` output; colors on terminals (`NO_COLOR` respected); output taller than the terminal goes through `less -RFX` (`NOTES_PAGER` to change, `cat` to turn off); exit 1 when nothing matches, with a hint on what to try.
