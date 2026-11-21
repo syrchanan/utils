@@ -13,7 +13,15 @@
 ## Workflow and verification
 - Prefer modern CLI tools when available (`rg` over `grep`, `fd` over `find`, `uv` over `pip`).
 - Always work inside a reproducible environment, such as venv, renv, Pkg, etc.
-- When creating a PR, add your commentary inside a <details><summary>'LLM MODEL NAME GOES HERE'<summary/>'REST OF CONTENT HERE'<details/> block so that it is collapsible, the user will optionally add their own note above it.
+- When creating a PR, put your commentary inside a collapsible `<details>` block, with the model name as the summary; the user may add their own note above it. Keep the blank line after `</summary>` so the markdown inside renders:
+  ```html
+  <details>
+  <summary>MODEL NAME</summary>
+
+  REST OF CONTENT
+
+  </details>
+  ```
 
 ## Hard Boundaries (Never Do Without Asking)
 - Never run destructive git commands (`push --force`, `reset --hard`, `clean -fd`).

@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `dotfiles/bin/note`: topics nest to any depth (`-t work/clientA/q4`) and are validated; `-x` adds a todo (`- [ ] HH:MM text`); `-D when` writes to another day; `-T HH:MM` sets the time; `-u` removes the last entry; opening the editor on a new file and leaving it empty no longer leaves a header-only file (or empty topic folders) behind; `$EDITOR` may carry flags (`code --wait`); repairs a missing trailing newline before appending; new files' header includes the topic; prints the path relative to the notes root; `--help` and fuller help text.
 - `README.md`, `dotfiles/README.md`: documented the above.
 
+### Fixed
+- `dotfiles/ai/AGENTS.md`: the PR commentary rule had malformed closing tags (`<summary/>`, `<details/>`), so the block didn't collapse; it now shows the exact `<details>` layout to use.
+
 ## [0.4.0] - 2026-11-21
 ### Added
 - `dotfiles/bin/` on PATH (via `loader.sh`, which now also exports `DOTFILES_DIR`), with scripts:
