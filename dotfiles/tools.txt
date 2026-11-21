@@ -1,0 +1,12 @@
+# CLI tools to install on a new machine.
+# Read by install.sh --tools (apt column) and the planned choco script (choco column).
+# Columns are whitespace-separated; "-" means not available from that package manager.
+# name     apt        choco
+ripgrep    ripgrep    ripgrep
+fd         fd-find    fd
+bat        bat        bat
+eza        eza        eza
+jq         jq         jq
+gh         gh         gh
+delta      git-delta  delta
+uv         -          uv
