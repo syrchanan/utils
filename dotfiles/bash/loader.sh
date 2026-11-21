@@ -8,6 +8,15 @@ done
 _LOADER_DIR="$(cd -P "$(dirname "$_DOTFILES_SOURCE")" && pwd)"
 _LIBS_DIR="$_LOADER_DIR/libs"
 
+# repo's dotfiles/ dir, used by `dotfiles update` and bin/ scripts
+export DOTFILES_DIR="$(cd -P "$_LOADER_DIR/.." && pwd)"
+
+# guard keeps PATH from growing on every reload
+case ":$PATH:" in
+	*":$DOTFILES_DIR/bin:"*) ;;
+	*) export PATH="$DOTFILES_DIR/bin:$PATH" ;;
+esac
+
 # source all sh
 if [ -d "$_LIBS_DIR" ]; then
 	for _file in "$_LIBS_DIR"/*.sh; do

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-21
+### Added
+- `dotfiles/bin/` on PATH (via `loader.sh`, which now also exports `DOTFILES_DIR`), with scripts:
+  - `gclean`: delete local branches whose remote is gone, plus their worktrees; keeps dirty worktrees; dry run unless `--yes`.
+  - `tolf`: convert CRLF to LF in files or recursively; skips `.git` and binaries; dry run unless `--yes`.
+  - `gi`: append `.gitignore` templates from `dotfiles/gitignore/` (python, r, julia, node from toptal; quarto hand-written); safe to rerun.
+  - `note`: timestamped notes in `$NOTES_DIR/[topic/]YYYY-MM-DD.md`.
+  - `mkvenv`: `uv venv` plus `uv sync` or `uv pip install -r requirements.txt`.
+- `dotfiles/bash/libs/30_env.sh`: venv auto-activate (off via `.noautovenv` or `DOTFILES_AUTOVENV=0`) and `JULIA_PROJECT=@.`.
+- `dotfiles/bash/libs/10_tools.sh`: `dotfiles update` (pull and reload).
+- `dotfiles/bash/libs/20_alias.sh`: `py` (`uv run python`), `ll` via eza, `fd`/`bat` for Debian binary names, each only when the tool exists.
+- `dotfiles/install.sh`: `--dry-run`, `--uninstall` and `--tools` (apt install from `dotfiles/tools.txt`).
+- `dotfiles/install.sh`: `--ai` also links Goose (`~/.config/goose/.goosehints`) and writes a Cursor rule (`~/.cursor/rules/global-agents.mdc`).
+- `dotfiles/tools.txt`: CLI tool list with apt and choco package names.
+- `dotfiles/bash/.bashrc.local.example`: template for machine-local settings.
+
+### Changed
+- `dotfiles/ai/CLAUDE.md` renamed to `dotfiles/ai/AGENTS.md` as the single source for all agents; `~/.claude/CLAUDE.md` now links to it.
+- `dotfiles/bash/libs/20_alias.sh`: `here` and `resu` are only defined when `explorer.exe` / `sudo` exist.
+- `README.md`, `dotfiles/README.md`: documented the above.
+
 ## [0.3.1] - 2026-11-13
 ### Changed
 - Repository renamed from `ai_tooling` to `utils` to reflect its broader scope as a general personal utilities repo.

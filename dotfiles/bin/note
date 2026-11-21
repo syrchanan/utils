@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Append a timestamped note to today's markdown file.
+set -euo pipefail
+
+usage() {
+	cat <<EOF
+Usage: note [-t topic] [-d dir] [text...]
+Appends "- HH:MM text" to \$NOTES_DIR/YYYY-MM-DD.md (NOTES_DIR defaults to ~/notes).
+  -t topic  write to \$NOTES_DIR/<topic>/YYYY-MM-DD.md
+  -d dir    use dir instead of \$NOTES_DIR
+Text can also be piped in. With no text, opens today's file in \$EDITOR.
+EOF
+}
+
+dir="${NOTES_DIR:-$HOME/notes}"
+topic=""
+while getopts ":t:d:h" opt; do
+	case "$opt" in
+		t) topic="$OPTARG" ;;
+		d) dir="$OPTARG" ;;
+		h) usage; exit 0 ;;
+		*) usage >&2; exit 1 ;;
+	esac
+done
+shift $((OPTIND - 1))
+
+[ -n "$topic" ] && dir="$dir/$topic"
+today="$(date +%F)"
+file="$dir/$today.md"
+mkdir -p "$dir"
+[ -f "$file" ] || printf '# %s\n\n' "$today" > "$file"
+
+text="$*"
+if [ -z "$text" ] && [ ! -t 0 ]; then
+	text="$(cat)"
+fi
+if [ -z "$text" ]; then
+	exec "${EDITOR:-vi}" "$file"
+fi
+
+stamp="$(date +%H:%M)"
+if [[ "$text" == *$'\n'* ]]; then
+	# multi-line: timestamp bullet, lines nested under it
+	{ printf -- '- %s\n' "$stamp"; printf '%s\n' "$text" | sed 's/^/  /'; } >> "$file"
+else
+	printf -- '- %s %s\n' "$stamp" "$text" >> "$file"
+fi
+echo "noted -> $file"

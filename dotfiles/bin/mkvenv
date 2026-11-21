@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Create .venv with uv and install the project's dependencies.
+set -euo pipefail
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+	cat <<EOF
+Usage: mkvenv [uv venv args...]
+Creates .venv with uv, then installs from pyproject.toml (uv sync)
+or requirements.txt (uv pip install -r) if either exists.
+EOF
+	exit 0
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+	echo "mkvenv: uv not found; install it with: curl -LsSf https://astral.sh/uv/install.sh | sh" >&2
+	exit 1
+fi
+
+uv venv "$@"
+
+if [ -f pyproject.toml ]; then
+	uv sync
+elif [ -f requirements.txt ]; then
+	uv pip install -r requirements.txt
+else
+	echo "mkvenv: no pyproject.toml or requirements.txt; created an empty .venv"
+fi

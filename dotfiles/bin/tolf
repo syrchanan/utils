@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Convert CRLF line endings to LF in files, recursively for directories.
+set -euo pipefail
+
+YES=0
+paths=()
+for arg in "$@"; do
+	case "$arg" in
+		--yes|-y) YES=1 ;;
+		-h|--help)
+			cat <<EOF
+Usage: tolf [--yes] [path...]
+Lists text files containing CRLF under each path (default: .), skipping .git
+and binary files. With --yes, converts them to LF in place.
+EOF
+			exit 0
+			;;
+		*) paths+=("$arg") ;;
+	esac
+done
+[ "${#paths[@]}" -eq 0 ] && paths=(.)
+
+count=0
+while IFS= read -r -d '' f; do
+	grep -Iq . "$f" || continue        # binary or empty
+	grep -q $'\r' "$f" || continue     # already LF
+	count=$((count + 1))
+	if [ "$YES" -eq 1 ]; then
+		sed -i 's/\r$//' "$f"
+		echo "converted $f"
+	else
+		echo "$f"
+	fi
+done < <(find "${paths[@]}" -name .git -prune -o -type f -print0)
+
+if [ "$count" -eq 0 ]; then
+	echo "No CRLF files found."
+elif [ "$YES" -eq 0 ]; then
+	echo "$count file(s) with CRLF; rerun with --yes to convert."
+fi

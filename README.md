@@ -9,10 +9,12 @@ The devcontainer supports Python, R, and Julia for multi-language AI development
 ### `dotfiles/`
 Shell config and global AI agent instructions for WSL/Linux, set up via `install.sh`.
 
-- `install.sh` — Installer; run with no flags for everything, or pick with `--bash` / `--ai` (`-h` for help). Idempotent, and backs up anything it replaces.
-- `bash/loader.sh` — Sourced from `~/.bashrc`; loads every `bash/libs/*.sh` in order, then `~/.bashrc.local` if present.
-- `bash/libs/` — Shell helpers and aliases (`10_tools.sh`, `20_alias.sh`).
-- `ai/CLAUDE.md` — Global Claude Code preferences, symlinked to `~/.claude/CLAUDE.md` by `--ai`.
+- `install.sh` — Installer; `--bash`, `--ai`, `--tools`, plus `--dry-run` and `--uninstall` (`-h` for help). Idempotent, and backs up anything it replaces.
+- `bash/loader.sh` — Sourced from `~/.bashrc`; puts `bin/` on PATH, loads every `bash/libs/*.sh` in order, then `~/.bashrc.local` if present.
+- `bash/libs/` — Shell functions and aliases, including venv auto-activate and `dotfiles update`.
+- `bin/` — Standalone scripts: `gclean`, `tolf`, `gi`, `note`, `mkvenv`.
+- `tools.txt` — CLI tools to install, by package manager.
+- `ai/AGENTS.md` — Global agent rules, linked into Claude Code, Goose and Cursor by `--ai`.
 
 See [Dotfiles README](./dotfiles/README.md) for usage.
 
@@ -44,7 +46,7 @@ The Ralph Loop enables iterative agent development with strict review, using dif
 
 ### Agent Rules
 
-`dotfiles/ai/CLAUDE.md` is a working doc which contains my personal rules on agent behavior, code style, and collaboration.
+`dotfiles/ai/AGENTS.md` is a working doc which contains my personal rules on agent behavior, code style, and collaboration.
 
 ### Changelog
 
