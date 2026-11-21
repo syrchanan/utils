@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# Delete local branches (and their worktrees) whose remote branch is gone.
+set -euo pipefail
+
+YES=0
+for arg in "$@"; do
+	case "$arg" in
+		--yes|-y) YES=1 ;;
+		-h|--help)
+			cat <<EOF
+Usage: gclean [--yes]
+Fetches with --prune, then finds local branches whose upstream is gone.
+Removes their worktrees (skipping dirty ones) and deletes the branches.
+Never touches the current branch or main/master. Dry run unless --yes.
+EOF
+			exit 0
+			;;
+		*) echo "gclean: unknown option $arg" >&2; exit 1 ;;
+	esac
+done
+
+git rev-parse --git-dir >/dev/null
+git fetch --prune --quiet
+
+current="$(git symbolic-ref --quiet --short HEAD || true)"
+
+gone=()
+while IFS=$'\t' read -r branch track; do
+	[ "$track" = "[gone]" ] || continue
+	case "$branch" in main|master|"$current") continue ;; esac
+	gone+=("$branch")
+done < <(git for-each-ref --format='%(refname:short)%09%(upstream:track)' refs/heads)
+
+# branch -> worktree path, skipping the main worktree (listed first)
+declare -A wt_of=()
+path="" first=1
+while read -r key value; do
+	case "$key" in
+		worktree) path="$value" ;;
+		branch)
+			[ "$first" -eq 0 ] && wt_of["${value#refs/heads/}"]="$path"
+			;;
+		"") first=0 ;;
+	esac
+done < <(git worktree list --porcelain; echo)
+
+if [ "${#gone[@]}" -eq 0 ]; then
+	echo "Nothing to clean."
+else
+	for branch in "${gone[@]}"; do
+		wt="${wt_of[$branch]:-}"
+		if [ "$YES" -eq 0 ]; then
+			[ -n "$wt" ] && echo "would remove worktree $wt"
+			echo "would delete branch $branch"
+			continue
+		fi
+		if [ -n "$wt" ]; then
+			# no --force: a dirty worktree is kept, and so is its branch
+			if ! git worktree remove "$wt"; then
+				echo "skipped $branch: worktree $wt has changes" >&2
+				continue
+			fi
+			echo "removed worktree $wt"
+		fi
+		git branch -D "$branch"
+	done
+fi
+
+if [ "$YES" -eq 1 ]; then
+	git worktree prune -v
+else
+	git worktree prune --dry-run -v
+	echo "Dry run; rerun with --yes to apply."
+fi

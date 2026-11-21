@@ -1,0 +1,7 @@
+# Quarto (hand-written; toptal has no quarto template)
+/.quarto/
+_freeze/
+_site/
+_book/
+*_files/
+*.quarto_ipynb

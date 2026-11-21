@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Append .gitignore templates kept in dotfiles/gitignore/.
+set -euo pipefail
+
+TEMPLATE_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../gitignore" && pwd)"
+DEFAULTS=(python r julia node quarto)
+
+TO_STDOUT=0
+names=()
+for arg in "$@"; do
+	case "$arg" in
+		-l|--list)
+			for f in "$TEMPLATE_DIR"/*.gitignore; do basename "$f" .gitignore; done
+			exit 0
+			;;
+		--stdout) TO_STDOUT=1 ;;
+		-h|--help)
+			cat <<EOF
+Usage: gi [-l] [--stdout] [template...]
+Appends templates to ./.gitignore (default: ${DEFAULTS[*]}).
+Each goes inside "# --- gi: <name> ---" markers; ones already present are skipped.
+  -l        list templates
+  --stdout  print instead of writing
+EOF
+			exit 0
+			;;
+		*) names+=("$arg") ;;
+	esac
+done
+[ "${#names[@]}" -eq 0 ] && names=("${DEFAULTS[@]}")
+
+target=".gitignore"
+for name in "${names[@]}"; do
+	src="$TEMPLATE_DIR/$name.gitignore"
+	if [ ! -f "$src" ]; then
+		echo "gi: no template '$name' (see gi -l)" >&2
+		exit 1
+	fi
+	start="# --- gi: $name ---"
+	if [ "$TO_STDOUT" -eq 0 ] && [ -f "$target" ] && grep -Fqx "$start" "$target"; then
+		echo "gi: $name already in $target"
+		continue
+	fi
+	block="$(printf '\n%s\n%s\n# --- end gi: %s ---\n' "$start" "$(cat "$src")" "$name")"
+	if [ "$TO_STDOUT" -eq 1 ]; then
+		printf '%s\n' "$block"
+	else
+		printf '%s\n' "$block" >> "$target"
+		echo "gi: added $name"
+	fi
+done
