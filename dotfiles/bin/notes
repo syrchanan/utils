@@ -1,0 +1,694 @@
+#!/usr/bin/env bash
+# Read, search and summarize notes written by `note`.
+set -euo pipefail
+NOTES_PROG=notes
+# shellcheck source=../lib/notes.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/notes.sh"
+
+COMMANDS="today show grep topics recap tags todo done undone help"
+RANGE_HELP='  -s, -u and show also take YYYY-MM, YYYY and ranges A..B
+  (either side may be empty: 2026-11-01.., ..yesterday, -7..-1)'
+
+usage() {
+	cat <<EOF
+notes - read, search and summarize notes written by 'note'
+
+Usage: notes [command] [args] [options]
+
+Commands:
+  today             today's notes, all topics (default)
+  show [when]       notes for a day or range (everything if omitted)
+  grep <pattern>    notes matching a regex; multi-line notes are shown whole
+  topics            topic tree with note counts, days and last date
+  recap [-n N]      the last N days including today (default 2)
+  tags              #tags by use, most used first
+  todo [-a]         open todos with their age; -a includes done ones
+  done <pattern>    mark the one open todo matching pattern as done ([x])
+  undone <pattern>  reopen the one done todo matching pattern ([ ])
+  help [command]    this help, or help for one command
+
+Options (any command):
+  -s, --since when  only notes on or after this date
+  -u, --until when  only notes on or before this date
+  -t, --topic path  only this topic and its sub-topics (work, work/clientA)
+  -d, --dir dir     notes root instead of \$NOTES_DIR
+      --md          plain markdown, for pasting into docs, PRs or chat
+      --tsv         tab-separated output for scripts: date, topic, time,
+                    state (note/todo/done), text (newlines as \\n)
+  -h, --help        this help; 'notes <command> --help' for one command
+
+$NOTES_DATE_HELP
+$RANGE_HELP
+
+Environment:
+  NOTES_DIR    notes root (default ~/notes)
+  NO_COLOR     set to turn colors off (also off when output isn't a terminal)
+  NOTES_PAGER  pager for output taller than the terminal (default 'less -RFX';
+               'cat' turns paging off)
+
+Exits 1 when nothing matches. Write notes with 'note'.
+
+Examples:
+  notes                           # today
+  notes recap -n 7                # the last week
+  notes show yesterday -t work
+  notes show 2026-11
+  notes grep 'deploy|rollback' -s -30
+  notes todo
+  notes done invoice
+  notes recap -n 7 --md > week.md
+  notes grep '#bug' --tsv | cut -f1,5
+EOF
+}
+
+cmd_help() {
+	case "$1" in
+		today) cat <<'EOF'
+notes today - today's notes from every topic
+
+Usage: notes [today] [-t topic] [--md|--tsv]
+
+Default command. With -s/-u it behaves like 'show' for that range.
+
+Examples:
+  notes
+  notes today -t work
+EOF
+			;;
+		show) cat <<EOF
+notes show - notes for a day or a range
+
+Usage: notes show [when] [-s since] [-u until] [-t topic] [--md|--tsv]
+
+'when' is a day or range; or use -s/-u instead. No 'when' and no -s/-u
+shows every note.
+
+$NOTES_DATE_HELP
+$RANGE_HELP
+
+Examples:
+  notes show yesterday
+  notes show 2026-11 -t work
+  notes show -7..-1
+  notes show -s "last monday"
+EOF
+			;;
+		grep) cat <<'EOF'
+notes grep - notes matching a pattern
+
+Usage: notes grep <pattern> [-s since] [-u until] [-t topic] [--md|--tsv]
+
+The pattern is an extended regex (awk), matched against the whole note, so a
+hit on any line of a multi-line note shows all of it. Smart case: ignores case
+unless the pattern has an uppercase letter. Start a pattern with '-' after --.
+
+Examples:
+  notes grep deploy
+  notes grep 'timeout|retry' -t work -s -30
+  notes grep '#bug'
+  notes grep -- '-x flag'
+EOF
+			;;
+		topics) cat <<'EOF'
+notes topics - topic tree with note counts
+
+Usage: notes topics [-t topic] [-s since] [-u until] [--md|--tsv]
+
+One row per topic folder (any depth), indented under its parent, with the
+number of notes, number of days with notes and the last date. Counts are per
+folder, not including sub-topics. --tsv prints: topic, notes, days, last;
+--md prints a markdown table.
+
+Examples:
+  notes topics
+  notes topics -t work
+  notes topics -s 2026-11
+EOF
+			;;
+		recap) cat <<'EOF'
+notes recap - the last N days
+
+Usage: notes recap [-n N] [-t topic] [--md|--tsv]
+
+Notes from the last N calendar days including today (default 2: yesterday and
+today), with a note count on each day. Days without notes are skipped. Ends
+with how many todos are still open (any date) and the age of the oldest.
+
+Examples:
+  notes recap                     # yesterday + today, e.g. for a standup
+  notes recap -n 7                # the last week
+  notes recap -n 14 -t work
+  notes recap -n 7 --md > week.md
+EOF
+			;;
+		tags) cat <<'EOF'
+notes tags - #tags by use
+
+Usage: notes tags [-t topic] [-s since] [-u until] [--md|--tsv]
+
+Counts #tags (a '#' then a letter, e.g. #bug, #followup, #proj/api) across
+notes, most used first, with the last date each was used. Tags are compared
+case-insensitively. --tsv prints: tag, count, last; --md a markdown table.
+Find a tag's notes with 'notes grep "#tag"'.
+
+Examples:
+  notes tags
+  notes tags -s -30 -t work
+EOF
+			;;
+		todo) cat <<'EOF'
+notes todo - open todos
+
+Usage: notes todo [-a] [-t topic] [-s since] [-u until] [--md|--tsv]
+
+Lists "- [ ]" entries (add them with 'note -x'), each with its age (today,
+3d, 2w, 4mo); ages of a week or more are highlighted. Mark one done with
+'notes done <pattern>'. -a also lists done todos.
+
+Examples:
+  notes todo
+  notes todo -t work
+  notes todo -a -s 2026-11
+EOF
+			;;
+		help) usage ;;
+		done | undone) cat <<'EOF'
+notes done - mark an open todo as done
+notes undone - reopen a done todo
+
+Usage: notes done <pattern> [-t topic] [-s since] [-u until]
+       notes done --line <file:line>
+       (same for undone)
+
+Finds todos whose text matches pattern (same rules as 'notes grep': regex,
+smart case, whole multi-line note). 'done' looks at open todos and changes
+"- [ ]" to "- [x]"; 'undone' looks at done todos and changes it back.
+Exactly one todo must match: if several do, they're listed with file:line and
+nothing changes; narrow the pattern, add -t/-s/-u, or pass --line.
+
+Options:
+  --line file:line  mark this exact todo; file is relative to the notes root,
+                    as listed (e.g. work/2026-11-20.md:3)
+
+Examples:
+  notes done invoice
+  notes done 'call (bob|alice)' -t work
+  notes done --line work/2026-11-20.md:3
+  notes undone invoice
+EOF
+			;;
+		*) notes_usage_error "unknown command '$1'" ;;
+	esac
+}
+
+# --- parse args: command, positional args and options in any order ---
+root="$(notes_root)"
+cmd="" since="" until="" topic="" tsv=0 md=0 n="" all=0 help=0 line_ref=""
+args=()
+need() { [ $# -ge 2 ] || notes_usage_error "$1 needs a value"; }
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-h | --help) help=1 ;;
+		-s | --since) need "$@"; since="$2"; shift ;;
+		-u | --until) need "$@"; until="$2"; shift ;;
+		-t | --topic) need "$@"; topic="$2"; shift ;;
+		-d | --dir) need "$@"; root="$(notes_root "$2")"; shift ;;
+		-n) need "$@"; n="$2"; shift ;;
+		-a | --all) all=1 ;;
+		--line) need "$@"; line_ref="$2"; shift ;;
+		--tsv) tsv=1 ;;
+		--md) md=1 ;;
+		--) shift; args+=("$@"); break ;;
+		-[0-9]*) args+=("$1") ;; # date spec like -3 or -7..-1
+		-*) notes_usage_error "unknown option $1" ;;
+		*)
+			if [ -z "$cmd" ]; then cmd="$1"; else args+=("$1"); fi
+			;;
+	esac
+	shift
+done
+
+if [ -n "$cmd" ] && [[ " $COMMANDS " != *" $cmd "* ]]; then
+	notes_usage_error "unknown command '$cmd'"
+fi
+if [ "$cmd" = help ]; then
+	[ "${#args[@]}" -le 1 ] || notes_usage_error "help takes one command"
+	if [ "${#args[@]}" -eq 1 ]; then cmd_help "${args[0]}"; else usage; fi
+	exit 0
+fi
+if [ "$help" = 1 ]; then
+	if [ -n "$cmd" ]; then cmd_help "$cmd"; else usage; fi
+	exit 0
+fi
+cmd="${cmd:-today}"
+[ "$tsv" = 0 ] || [ "$md" = 0 ] || notes_usage_error "pick one of --md and --tsv"
+
+[ -z "$n" ] || [ "$cmd" = recap ] || notes_usage_error "-n only works with recap"
+[ "$all" = 0 ] || [ "$cmd" = todo ] || notes_usage_error "-a only works with todo"
+nargs=${#args[@]}
+case "$cmd" in
+	show) [ "$nargs" -le 1 ] || notes_usage_error "show takes one date or range" ;;
+	grep) [ "$nargs" -eq 1 ] && [ -n "${args[0]}" ] || notes_usage_error "grep needs one pattern" ;;
+	done | undone)
+		if [ -n "$line_ref" ]; then
+			[ "$nargs" -eq 0 ] || notes_usage_error "give $cmd a pattern or --line, not both"
+		else
+			[ "$nargs" -eq 1 ] && [ -n "${args[0]}" ] || notes_usage_error "$cmd needs one pattern (or --line file:line)"
+		fi
+		;;
+	*) [ "$nargs" -eq 0 ] || notes_usage_error "$cmd takes no arguments (got '${args[0]}')" ;;
+esac
+[ -z "$line_ref" ] || [ "$cmd" = done ] || [ "$cmd" = undone ] || notes_usage_error "--line only works with done/undone"
+
+# set_box FILE LINE: done flips "- [ ]" to "- [x]", undone flips it back
+set_box() {
+	local file="$1" ln="$2" cur rel label
+	rel="${file#"$root"/}"
+	cur="$(sed -n "${ln}p" "$file")"
+	label="${cur:6}"
+	# multi-line todo: the bullet holds only the time, so show its first text line
+	if [[ "$label" =~ ^[0-9]{2}:[0-9]{2}$ ]]; then
+		label="$label $(sed -n "$((ln + 1))s/^ *//p" "$file")"
+	fi
+	if [ "$cmd" = done ]; then
+		[[ "$cur" == "- [ ]"* ]] || notes_die "$rel:$ln is not an open todo: $cur"
+		sed -i "${ln}s/^- \[ \]/- [x]/" "$file"
+		printf 'done -> %s:%s  %s\n' "$rel" "$ln" "$label"
+	else
+		[[ "$cur" == "- [x]"* || "$cur" == "- [X]"* ]] || notes_die "$rel:$ln is not a done todo: $cur"
+		sed -i "${ln}s/^- \[[xX]\]/- [ ]/" "$file"
+		printf 'reopened -> %s:%s  %s\n' "$rel" "$ln" "$label"
+	fi
+}
+
+if [ -n "$line_ref" ]; then
+	[[ "$line_ref" =~ ^(.+):([1-9][0-9]*)$ ]] || notes_usage_error "--line wants file:line, e.g. work/2026-11-20.md:3"
+	f="$root/${BASH_REMATCH[1]}"
+	[ -f "$f" ] || notes_die "no such notes file: ${BASH_REMATCH[1]}"
+	set_box "$f" "${BASH_REMATCH[2]}"
+	exit 0
+fi
+
+# --- date range ---
+lo=0000-00-00 hi=9999-99-99
+if [ -n "$since" ]; then r="$(resolve_range "$since")"; lo="${r% *}"; fi
+if [ -n "$until" ]; then r="$(resolve_range "$until")"; hi="${r#* }"; fi
+case "$cmd" in
+	today)
+		if [ -z "$since$until" ]; then lo="$(date +%F)" hi="$lo"; fi
+		;;
+	show)
+		if [ "$nargs" -eq 1 ]; then
+			[ -z "$since$until" ] || notes_usage_error "give show a date or use -s/-u, not both"
+			r="$(resolve_range "${args[0]}")"
+			lo="${r% *}" hi="${r#* }"
+		fi
+		;;
+	recap)
+		[ -z "$since$until" ] || notes_usage_error "recap uses -n, not -s/-u"
+		n="${n:-2}"
+		[[ "$n" =~ ^[1-9][0-9]*$ ]] || notes_usage_error "-n must be a positive number"
+		lo="$(resolve_date "-$((n - 1))")" hi="$(date +%F)"
+		;;
+esac
+
+# --- topic ---
+search="$root"
+if [ -n "$topic" ]; then
+	validate_topic "$topic"
+	search="$root/$topic"
+fi
+[ -d "$search" ] || notes_die "no notes in $search"
+
+pat="" icase=0 want=""
+case "$cmd" in
+	grep | done | undone)
+		pat="${args[0]}"
+		[[ "$pat" =~ [A-Z] ]] || icase=1
+		;;
+esac
+case "$cmd" in
+	todo) if [ "$all" = 1 ]; then want=anytodo; else want=todo; fi ;;
+	done) want=todo ;;
+	undone) want=doneonly ;;
+esac
+# done/undone also need each entry's file and first line
+loc=0
+if [ "$cmd" = done ] || [ "$cmd" = undone ]; then loc=1; fi
+color=0
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "$md" = 0 ]; then color=1; fi
+today="$(date +%F)"
+
+# --- parse every day file into records: date \t topic \t time \t state \t text
+# (topic "-" = root, state note/todo/done, lines of text joined by \037)
+# with loc=1, two more fields: file \t line where the entry starts
+PARSE_AWK='
+function wanted() {
+	if (want == "todo" && state != "todo") return 0
+	if (want == "doneonly" && state != "done") return 0
+	if (want == "anytodo" && state == "note") return 0
+	if (pat != "") return (icase ? tolower(text) : text) ~ pat
+	return 1
+}
+function flush() {
+	if (have && keep && wanted())
+		print date "\t" topic "\t" time "\t" state "\t" text (loc ? "\t" FILE "\t" sline : "")
+	have = 0; text = ""; time = ""; state = "note"; pend = 0
+}
+function add(line) {
+	if (text == "") { text = line; pend = 0; return }
+	while (pend > 0) { text = text "\037"; pend-- }
+	text = text "\037" line
+}
+BEGIN { pat = ENVIRON["PAT"]; root = ENVIRON["ROOT"]; state = "note" }
+FNR == 1 {
+	flush()
+	FILE = FILENAME
+	date = FILENAME; sub(/^.*\//, "", date); sub(/\.md$/, "", date)
+	topic = substr(FILENAME, length(root) + 2)
+	if (topic ~ /\//) sub(/\/[^\/]*$/, "", topic); else topic = "-"
+	keep = (date >= lo && date <= hi)
+}
+!keep { next }
+{ sub(/\r$/, ""); gsub(/\t/, "    ") }
+/^#+( |$)/ { next }
+/^[ \t]*$/ { if (have) pend++; next }
+/^- / {
+	flush(); have = 1; sline = FNR
+	line = substr($0, 3)
+	if (line ~ /^\[[ xX]\]/) {
+		state = (substr(line, 2, 1) == " ") ? "todo" : "done"
+		line = substr(line, 4); sub(/^ /, "", line)
+	}
+	if (line ~ /^[0-9][0-9]:[0-9][0-9]($| )/) { time = substr(line, 1, 5); line = substr(line, 7) }
+	text = line
+	next
+}
+{ line = $0; sub(/^  /, "", line); if (!have) sline = FNR; have = 1; add(line) }
+END { flush() }
+'
+TAB=$'\t'
+# parse LO HI WANT -> sorted records (uses search, root, pat, icase, loc)
+parse() {
+	find "$search" -type f -name '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].md' -print0 |
+		LC_ALL=C sort -z |
+		ROOT="$root" PAT="$pat" xargs -0 -r awk -v lo="$1" -v hi="$2" -v want="$3" -v icase="$icase" -v loc="$loc" "$PARSE_AWK" |
+		LC_ALL=C sort -s -t "$TAB" -k1,1 -k3,3
+}
+records="$(parse "$lo" "$hi" "$want")"
+
+where=""
+[ -z "$topic" ] || where=" under '$topic'"
+if [ -z "$records" ]; then
+	if [ "$lo" = "$hi" ]; then span="on $lo"; else span="between ${lo/0000-00-00/the start} and ${hi/9999-99-99/now}"; fi
+	[ "$lo$hi" != 0000-00-009999-99-99 ] || span="at all"
+	case "$cmd" in
+		today)
+			if [ -z "$since$until" ]; then
+				echo "notes: no notes today$where yet. Add one: note${topic:+ -t $topic} \"...\"" >&2
+			else
+				echo "notes: no notes$where $span" >&2
+			fi
+			;;
+		show | recap) echo "notes: no notes$where $span" >&2 ;;
+		grep) echo "notes: no notes$where match '$pat' (searched $span)" >&2 ;;
+		todo)
+			if [ "$all" = 1 ]; then echo "notes: no todos$where. Add one: note -x${topic:+ -t $topic} \"...\"" >&2
+			else echo "notes: no open todos$where. Nice." >&2; fi
+			;;
+		done) echo "notes: no open todo$where matches '$pat' (see: notes todo)" >&2 ;;
+		undone) echo "notes: no done todo$where matches '$pat' (see: notes todo -a)" >&2 ;;
+		*) echo "notes: no notes$where $span" >&2 ;;
+	esac
+	exit 1
+fi
+
+# --- done / undone: change exactly one match, or list them ---
+if [ "$loc" = 1 ]; then
+	# last two fields are file and line (split by hand: read would merge empty fields)
+	hit_loc() { ln="${1##*"$TAB"}"; f="${1%"$TAB"*}"; f="${f##*"$TAB"}"; }
+	mapfile -t hits <<<"$records"
+	if [ "${#hits[@]}" -eq 1 ]; then
+		hit_loc "${hits[0]}"
+		set_box "$f" "$ln"
+		exit 0
+	fi
+	what="open"
+	[ "$cmd" = undone ] && what="done"
+	echo "notes: ${#hits[@]} $what todos match '$pat'; nothing changed. Narrow the pattern, add -t/-s/-u, or pick one:" >&2
+	for h in "${hits[@]}"; do
+		hit_loc "$h"
+		d="${h%%"$TAB"*}"
+		text="$(cut -f5 <<<"$h")"
+		printf '  notes %s --line %s:%s   # %s  %s\n' "$cmd" "${f#"$root"/}" "$ln" "$d" "${text%%$'\037'*}" >&2
+	done
+	exit 1
+fi
+
+# --- output ---
+TSV_AWK='
+BEGIN { FS = OFS = "\t" }
+{ k = split($5, a, "\037"); t = a[1]; for (i = 2; i <= k; i++) t = t "\\n" a[i]; $5 = t; print }
+'
+
+ENTRIES_AWK='
+BEGIN {
+	FS = "\t"; pat = ENVIRON["PAT"]; base = ENVIRON["BASE"]
+	if (color) { B = "\033[1m"; D = "\033[2m"; C = "\033[36m"; H = "\033[1;33m"; R = "\033[0m" }
+	split("Sun Mon Tue Wed Thu Fri Sat", DOW, " ")
+	split("0 3 2 5 0 3 5 1 4 6 2 4", T, " ")
+}
+function dow(d,   y, m, k) {
+	y = substr(d, 1, 4) + 0; m = substr(d, 6, 2) + 0; k = substr(d, 9, 2) + 0
+	if (m < 3) y--
+	return DOW[(y + int(y / 4) - int(y / 100) + int(y / 400) + T[m] + k) % 7 + 1]
+}
+function hl(s,   out, low) {
+	if (!color || pat == "") return s
+	out = ""
+	while (s != "") {
+		low = icase ? tolower(s) : s
+		if (!match(low, pat) || RLENGTH < 1) break
+		out = out substr(s, 1, RSTART - 1) H substr(s, RSTART, RLENGTH) R
+		s = substr(s, RSTART + RLENGTH)
+	}
+	return out s
+}
+# days since 4713 BC, to subtract dates
+function jdn(d,   y, m, k, a) {
+	y = substr(d, 1, 4) + 0; m = substr(d, 6, 2) + 0; k = substr(d, 9, 2) + 0
+	a = int((14 - m) / 12); y += 4800 - a; m += 12 * a - 3
+	return k + int((153 * m + 2) / 5) + 365 * y + int(y / 4) - int(y / 100) + int(y / 400) - 32045
+}
+function age(d,   n) {
+	n = jdn(today) - jdn(d)
+	if (n <= 0) return "today"
+	if (n < 14) return n "d"
+	if (n < 60) return int(n / 7) "w"
+	return int(n / 30) "mo"
+}
+function agecolor(d) { return (jdn(today) - jdn(d) >= 7) ? Y : D }
+{ n++; d[n] = $1; tp[n] = $2; tm[n] = $3; st[n] = $4; tx[n] = $5; cnt[$1]++ }
+END {
+	if (color) Y = "\033[33m"
+	for (i = 1; i <= n; i++) {
+		if (d[i] != last) {
+			if (i > 1) print ""
+			h = "## " d[i] " (" dow(d[i]) ")"
+			if (counts) h = h " · " cnt[d[i]] (cnt[d[i]] == 1 ? " note" : " notes")
+			print B h R
+			if (md) print ""
+			last = d[i]
+		}
+		tag = tp[i]
+		if (base != "") { if (tag == base) tag = ""; else tag = substr(tag, length(base) + 2) }
+		else if (tag == "-") tag = ""
+		k = split(tx[i], lines, "\037")
+		showage = (ages && st[i] == "todo")
+		if (md) {
+			# markdown list item: same shape as the source files, task-list boxes
+			out = "- "
+			if (st[i] == "todo") out = out "[ ] "
+			else if (st[i] == "done") out = out "[x] "
+			if (tm[i] != "") out = out tm[i] " "
+			if (tag != "") out = out "`" tag "` "
+			out = out lines[1]
+			if (showage) out = out " _(" age(d[i]) ")_"
+			print out
+			for (j = 2; j <= k; j++) print (lines[j] == "" ? "" : "  " lines[j])
+			continue
+		}
+		time = tm[i]; if (time == "") time = "     "
+		out = "  " D time R "  "; vis = 9
+		if (tag != "") { out = out C "[" tag "]" R " "; vis += length(tag) + 3 }
+		box = ""
+		if (st[i] == "todo") box = "[ ] "
+		else if (st[i] == "done") box = D "[x]" R " "
+		suffix = showage ? "  " agecolor(d[i]) "(" age(d[i]) ")" R : ""
+		print out box hl(lines[1]) suffix
+		pad = sprintf("%" vis "s", "")
+		for (j = 2; j <= k; j++) print (lines[j] == "" ? "" : pad hl(lines[j]))
+	}
+	# recap footer: open todos from any date
+	if (opencount > 0) {
+		msg = opencount " open todo" (opencount == 1 ? "" : "s") ", oldest " age(oldest)
+		print ""
+		if (md) print "_" msg "_"
+		else print agecolor(oldest) msg " (notes todo)" R
+	}
+}
+'
+
+# topic stats, plus every ancestor folder down to -t, keyed so "/" sorts first
+TOPICS_AWK='
+BEGIN { FS = "\t"; base = ENVIRON["BASE"] }
+{
+	e[$2]++
+	if (!(($2, $1) in seen)) { seen[$2, $1] = 1; days[$2]++ }
+	if ($1 > lastd[$2]) lastd[$2] = $1
+}
+END {
+	for (t in e) {
+		all[t] = 1; p = t
+		while (p ~ /\// && p != base) {
+			sub(/\/[^\/]*$/, "", p)
+			if (base != "" && length(p) < length(base)) break
+			all[p] = 1
+		}
+	}
+	for (t in all) {
+		key = t; gsub(/\//, "\001", key); if (t == "-") key = ""
+		print key "\t" t "\t" (e[t] + 0) "\t" (days[t] + 0) "\t" ((t in lastd) ? lastd[t] : "-")
+	}
+}
+'
+TOPICS_FMT_AWK='
+BEGIN {
+	FS = "\t"; base = ENVIRON["BASE"]; bd = (base == "") ? 1 : split(base, x, "/")
+	if (color) { B = "\033[1m"; D = "\033[2m"; R = "\033[0m" }
+}
+{
+	n++; ent[n] = $2; dy[n] = $3; ld[n] = $4
+	if ($1 == "-") label[n] = "(root)"
+	else if ($1 == base) label[n] = base
+	else {
+		segs = split($1, parts, "/")
+		label[n] = sprintf("%" (2 * (segs - bd)) "s", "") parts[segs]
+	}
+	if (length(label[n]) > w) w = length(label[n])
+}
+END {
+	if (w < 5) w = 5
+	printf B "%-" w "s  %5s  %4s  %s" R "\n", "topic", "notes", "days", "last"
+	for (i = 1; i <= n; i++) {
+		if (ent[i] == 0) printf D "%-" w "s  %5s  %4s  %s" R "\n", label[i], "-", "-", "-"
+		else printf "%-" w "s  %5d  %4d  %s\n", label[i], ent[i], dy[i], ld[i]
+	}
+}
+'
+
+# #tags: "#" + letter, not preceded by a word char, "&", "#" or "/" (skips url#frag)
+TAGS_AWK='
+BEGIN { FS = "\t" }
+{
+	s = " " $5; gsub(/\037/, " ", s)
+	while (match(s, /[^A-Za-z0-9_&#\/]#[A-Za-z][A-Za-z0-9_\/-]*/)) {
+		tag = tolower(substr(s, RSTART + 1, RLENGTH - 1))
+		c[tag]++; if ($1 > last[tag]) last[tag] = $1
+		s = substr(s, RSTART + RLENGTH)
+	}
+}
+END { for (t in c) print c[t] "\t" t "\t" last[t] }
+'
+TAGS_FMT_AWK='
+BEGIN { FS = "\t"; if (color) { B = "\033[1m"; C = "\033[36m"; R = "\033[0m" } }
+{ n++; c[n] = $1; t[n] = $2; l[n] = $3; if (length($2) > w) w = length($2) }
+END {
+	if (w < 3) w = 3
+	printf B "%5s  %-" w "s  %s" R "\n", "count", "tag", "last"
+	for (i = 1; i <= n; i++) printf "%5d  " C "%-" w "s" R "  %s\n", c[i], t[i], l[i]
+}
+'
+
+# markdown table from tsv: md_table "head1|head2|..." (first column in backticks)
+md_table() {
+	awk -v head="$1" 'BEGIN {
+		FS = "\t"; k = split(head, h, "|")
+		row = "|"; sep = "|"
+		for (i = 1; i <= k; i++) { row = row " " h[i] " |"; sep = sep (i == 1 ? " --- |" : " ---: |") }
+		print row; print sep
+	}
+	{ row = "| `" $1 "` |"; for (i = 2; i <= NF; i++) row = row " " $i " |"; print row }'
+}
+
+export PAT="$pat" BASE="$topic"
+case "$cmd" in
+	tags)
+		counted="$(printf '%s\n' "$records" | awk "$TAGS_AWK" | LC_ALL=C sort -t "$TAB" -k1,1nr -k2,2)"
+		if [ -z "$counted" ]; then
+			echo "notes: no #tags$where. Tag a note like: note${topic:+ -t $topic} \"fixed it #bug\"" >&2
+			exit 1
+		fi
+		;;
+	recap)
+		# open todos from any date, for the footer
+		opencount=0 oldest=""
+		if [ "$tsv" = 0 ]; then
+			open="$(parse 0000-00-00 9999-99-99 todo)"
+			if [ -n "$open" ]; then
+				opencount="$(printf '%s\n' "$open" | wc -l)"
+				oldest="${open%%"$TAB"*}"
+			fi
+		fi
+		;;
+esac
+
+render() {
+	case "$cmd" in
+		topics)
+			sorted="$(printf '%s\n' "$records" | awk "$TOPICS_AWK" | LC_ALL=C sort -t "$TAB" -k1,1 | cut -f2-)"
+			if [ "$tsv" = 1 ]; then
+				printf '%s\n' "$sorted"
+			elif [ "$md" = 1 ]; then
+				printf '%s\n' "$sorted" | md_table "topic|notes|days|last"
+			else
+				printf '%s\n' "$sorted" | awk -v color="$color" "$TOPICS_FMT_AWK"
+			fi
+			;;
+		tags)
+			if [ "$tsv" = 1 ]; then
+				printf '%s\n' "$counted" | awk 'BEGIN { FS = OFS = "\t" } { print $2, $1, $3 }'
+			elif [ "$md" = 1 ]; then
+				printf '%s\n' "$counted" | awk 'BEGIN { FS = OFS = "\t" } { print $2, $1, $3 }' | md_table "tag|count|last"
+			else
+				printf '%s\n' "$counted" | awk -v color="$color" "$TAGS_FMT_AWK"
+			fi
+			;;
+		*)
+			if [ "$tsv" = 1 ]; then
+				printf '%s\n' "$records" | awk "$TSV_AWK"
+			else
+				counts=0 ages=0
+				[ "$cmd" = recap ] && counts=1
+				[ "$cmd" = todo ] && ages=1
+				printf '%s\n' "$records" | awk -v color="$color" -v icase="$icase" -v counts="$counts" \
+					-v ages="$ages" -v md="$md" -v today="$today" \
+					-v opencount="${opencount:-0}" -v oldest="${oldest:-}" "$ENTRIES_AWK"
+			fi
+			;;
+	esac
+}
+
+# page output taller than the terminal (less -F exits at once when it fits)
+pager=""
+if [ -t 1 ] && [ "$tsv" = 0 ]; then
+	pager="${NOTES_PAGER:-less -RFX}"
+	command -v "${pager%% *}" >/dev/null 2>&1 || pager=""
+	[ "$pager" != cat ] || pager=""
+fi
+if [ -n "$pager" ]; then
+	# shellcheck disable=SC2086 # pager may carry its own flags
+	render | $pager
+else
+	render
+fi

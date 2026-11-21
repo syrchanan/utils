@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-11-21
+### Added
+- `dotfiles/bin/notes`: read notes written by `note`. Commands: `today` (default), `show <when>`, `grep <pattern>` (smart case, whole multi-line notes), `topics` (tree with counts), `recap [-n N]` (last N days, default 2), `tags` (`#tag` counts), `todo [-a]`, `done <pattern>` / `undone <pattern>` (mark the single matching todo `[x]` or back to `[ ]`; lists candidates with `--line file:line` when several match), `help [command]`. Filters `-s`/`-u`/`-t`; `--md` (markdown lists and tables, for pasting) and `--tsv` output; colors on terminals (`NO_COLOR` respected); output taller than the terminal goes through `less -RFX` (`NOTES_PAGER` to change, `cat` to turn off); exit 1 when nothing matches, with a hint on what to try.
+  - `todo` shows each open todo's age (`3d`, `2w`, `4mo`), highlighted from a week old; `recap` ends with the open-todo count and the oldest one's age.
+- `dotfiles/lib/notes.sh`: shared date-spec parsing (`today`, `yesterday`, `-N`, `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, `A..B`, anything `date -d` reads) and topic validation for `note` and `notes`.
+- `dotfiles/bash/libs/40_complete.sh`: tab completion for `note` and `notes` (commands, options, nested topic paths, and `#tags` already used, also inside quotes).
+
+### Changed
+- `dotfiles/bin/note`: topics nest to any depth (`-t work/clientA/q4`) and are validated; `-x` adds a todo (`- [ ] HH:MM text`); `-D when` writes to another day; `-T HH:MM` sets the time; `-u` removes the last entry; opening the editor on a new file and leaving it empty no longer leaves a header-only file (or empty topic folders) behind; `$EDITOR` may carry flags (`code --wait`); repairs a missing trailing newline before appending; new files' header includes the topic; prints the path relative to the notes root; `--help` and fuller help text.
+- `README.md`, `dotfiles/README.md`: documented the above.
+
 ## [0.4.0] - 2026-11-21
 ### Added
 - `dotfiles/bin/` on PATH (via `loader.sh`, which now also exports `DOTFILES_DIR`), with scripts:

@@ -1,48 +1,139 @@
 #!/usr/bin/env bash
-# Append a timestamped note to today's markdown file.
+# Append a timestamped note (or todo) to a day's markdown file. Read them with `notes`.
 set -euo pipefail
+NOTES_PROG=note
+# shellcheck source=../lib/notes.sh
+source "$(dirname "$(readlink -f "$0")")/../lib/notes.sh"
 
 usage() {
 	cat <<EOF
-Usage: note [-t topic] [-d dir] [text...]
-Appends "- HH:MM text" to \$NOTES_DIR/YYYY-MM-DD.md (NOTES_DIR defaults to ~/notes).
-  -t topic  write to \$NOTES_DIR/<topic>/YYYY-MM-DD.md
-  -d dir    use dir instead of \$NOTES_DIR
-Text can also be piped in. With no text, opens today's file in \$EDITOR.
+note - append a timestamped note to a daily markdown file
+
+Usage: note [options] [text...]
+
+Writes "- HH:MM text" to \$NOTES_DIR/[topic/]YYYY-MM-DD.md. Text can also be
+piped in; multi-line text is nested under the timestamp. With no text, opens
+the day's file in \$EDITOR (a new file left empty is removed again). Quote
+text that has #tags: unquoted, the shell treats '#' as a comment. Read,
+search and summarize notes with 'notes'.
+
+Options:
+  -t topic    file under a topic; nest with '/' to any depth (work/clientA/q4)
+  -D when     write to another day instead of today (see Date specs)
+  -T HH:MM    stamp this time instead of now (24-hour; 9:30 is fine)
+  -x          add as a todo: "- [ ] HH:MM text" (done later: notes done <pattern>)
+  -u          undo: remove the last entry from the day's file and print it
+  -d dir      notes root instead of \$NOTES_DIR
+  -h, --help  show this help
+
+$NOTES_DATE_HELP
+
+Environment:
+  NOTES_DIR   notes root (default ~/notes)
+  EDITOR      editor used when no text is given (default vi; flags allowed,
+              e.g. "code --wait")
+
+Examples:
+  note "fixed the login redirect #bug"
+  note -t work/clientA "kickoff call, follow up friday #followup"
+  note -x "send invoice"
+  note -D yesterday -T 16:45 "forgot to log the deploy"
+  git log --oneline -5 | note -t work
+  note -u                          # remove the note you just added
 EOF
 }
 
-dir="${NOTES_DIR:-$HOME/notes}"
-topic=""
-while getopts ":t:d:h" opt; do
+# getopts has no long options, so catch --help up front
+for arg in "$@"; do
+	case "$arg" in
+		--) break ;;
+		--help) usage; exit 0 ;;
+	esac
+done
+
+root="$(notes_root)"
+topic="" day="today" todo=0 undo=0 at=""
+while getopts ":t:D:T:d:xuh" opt; do
 	case "$opt" in
 		t) topic="$OPTARG" ;;
-		d) dir="$OPTARG" ;;
+		D) day="$OPTARG" ;;
+		T)
+			# HH:MM or H:MM, 24-hour
+			[[ "$OPTARG" =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]] || notes_usage_error "-T wants a 24-hour time like 09:30 or 14:05"
+			at="$(printf '%02d:%s' "$((10#${BASH_REMATCH[1]}))" "${BASH_REMATCH[2]}")"
+			;;
+		d) root="$(notes_root "$OPTARG")" ;;
+		x) todo=1 ;;
+		u) undo=1 ;;
 		h) usage; exit 0 ;;
-		*) usage >&2; exit 1 ;;
+		:) notes_usage_error "-$OPTARG needs a value" ;;
+		*) notes_usage_error "unknown option -$OPTARG" ;;
 	esac
 done
 shift $((OPTIND - 1))
 
-[ -n "$topic" ] && dir="$dir/$topic"
-today="$(date +%F)"
-file="$dir/$today.md"
-mkdir -p "$dir"
-[ -f "$file" ] || printf '# %s\n\n' "$today" > "$file"
-
+dir="$root"
+if [ -n "$topic" ]; then
+	validate_topic "$topic"
+	dir="$root/$topic"
+fi
+date_str="$(resolve_date "$day")"
+file="$dir/$date_str.md"
+rel="${file#"$root"/}"
 text="$*"
+
+if [ "$undo" = 1 ]; then
+	[ -z "$text" ] || notes_usage_error "-u takes no text"
+	[ "$todo" = 0 ] || notes_usage_error "-u and -x don't mix"
+	[ -z "$at" ] || notes_usage_error "-u and -T don't mix"
+	[ -f "$file" ] || notes_die "nothing to undo: $rel does not exist"
+	start="$(awk '/^- /{n=NR} END{print n+0}' "$file")"
+	[ "$start" -gt 0 ] || notes_die "nothing to undo: no entries in $rel"
+	tail -n +"$start" "$file"
+	sed -i "${start},\$d" "$file"
+	echo "undone -> $rel"
+	exit 0
+fi
+
 if [ -z "$text" ] && [ ! -t 0 ]; then
 	text="$(cat)"
 fi
-if [ -z "$text" ]; then
-	exec "${EDITOR:-vi}" "$file"
+
+header="# $date_str"
+[ -z "$topic" ] || header="$header · $topic"
+created=0
+if [ ! -f "$file" ]; then
+	mkdir -p "$dir"
+	printf '%s\n\n' "$header" >"$file"
+	created=1
 fi
 
-stamp="$(date +%H:%M)"
+if [ -z "$text" ]; then
+	[ -z "$at" ] || notes_usage_error "-T needs note text"
+	status=0
+	# like git: EDITOR may carry flags or quotes, e.g. "code --wait"
+	sh -c "${EDITOR:-vi} \"\$@\"" editor "$file" || status=$?
+	# opened just to look, or quit without writing: don't leave a header-only file behind
+	if [ "$created" = 1 ] && [ "$(tr -d '[:space:]' <"$file")" = "$(printf '%s' "$header" | tr -d '[:space:]')" ]; then
+		rm -f "$file"
+		d="$dir"
+		while [ "$d" != "$root" ] && rmdir "$d" 2>/dev/null; do d="$(dirname "$d")"; done
+	fi
+	exit "$status"
+fi
+
+# a hand edit may have left no trailing newline; don't glue onto that line
+if [ -s "$file" ] && [ -n "$(tail -c1 "$file")" ]; then
+	echo >>"$file"
+fi
+
+box=""
+[ "$todo" = 1 ] && box="[ ] "
+stamp="${at:-$(date +%H:%M)}"
 if [[ "$text" == *$'\n'* ]]; then
 	# multi-line: timestamp bullet, lines nested under it
-	{ printf -- '- %s\n' "$stamp"; printf '%s\n' "$text" | sed 's/^/  /'; } >> "$file"
+	{ printf -- '- %s%s\n' "$box" "$stamp"; printf '%s\n' "$text" | sed 's/^/  /'; } >>"$file"
 else
-	printf -- '- %s %s\n' "$stamp" "$text" >> "$file"
+	printf -- '- %s%s %s\n' "$box" "$stamp" "$text" >>"$file"
 fi
-echo "noted -> $file"
+echo "noted -> $rel"
