@@ -1,0 +1,18 @@
+# ~/.bashrc.local — machine-specific overrides, sourced last by loader.sh.
+# Copy to ~/.bashrc.local and edit. Never commit the real file: it may hold secrets.
+
+# --- paths ---
+# export PATH="$HOME/tools/bin:$PATH"
+
+# --- proxies (work machines) ---
+# export HTTP_PROXY="http://proxy.example:8080"
+# export HTTPS_PROXY="$HTTP_PROXY"
+# export NO_PROXY="localhost,127.0.0.1"
+
+# --- dotfiles settings ---
+# export NOTES_DIR="$HOME/notes"      # where `note` writes
+# export DOTFILES_AUTOVENV=0          # turn off venv auto-activate on this machine
+
+# --- secrets ---
+# Prefer a secrets manager; if you must, keep them here and only here.
+# export SOME_API_KEY="..."
