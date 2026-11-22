@@ -1,22 +1,33 @@
 # tab completion for bin/ scripts and the dotfiles command
 
-_NOTES_COMMANDS="today show grep topics recap tags todo done undone help"
+_NOTES_COMMANDS="today show grep topics recap tags todo done undone where help"
 
-# notes root, honoring -d/--dir earlier on the line
+# notes root, honoring -d/--dir or -g/--global earlier on the line, then the
+# nearest project .notes/ (same order as notes_root in lib/notes.sh)
 _notes_root() {
-	local root="${NOTES_DIR:-$HOME/notes}" i
+	local root="" dir="$PWD" i
+	while [ -n "$dir" ]; do
+		if [ "$dir" != "$HOME" ] && [ -d "$dir/.notes" ]; then root="${dir%/}/.notes"; break; fi
+		[ "$dir" = / ] && break
+		dir="${dir%/*}"; dir="${dir:-/}" # parent, without forking dirname
+	done
+	[ -n "$root" ] || root="${NOTES_DIR:-$HOME/.notes}"
 	for ((i = 1; i < COMP_CWORD; i++)); do
-		case "${COMP_WORDS[i]}" in -d | --dir) root="${COMP_WORDS[i + 1]}" ;; esac
+		case "${COMP_WORDS[i]}" in
+			-d | --dir) root="${COMP_WORDS[i + 1]}" ;;
+			-g | --global) root="${NOTES_DIR:-$HOME/.notes}" ;;
+		esac
 	done
 	printf '%s\n' "${root/#\~/$HOME}"
 }
 
-# topic folders under the notes root, any depth, relative (work, work/clientA)
+# topic folders under the notes root, any depth, relative (work, work/clientA).
+# Hidden folders inside the root are skipped; the root itself is usually .notes
 _notes_topics() {
 	local root
 	root="$(_notes_root)"
 	[ -d "$root" ] || return 0
-	find "$root" -mindepth 1 -type d ! -path '*/.*' -printf '%P\n' 2>/dev/null
+	find "$root/" -mindepth 1 -name '.*' -prune -o -type d -printf '%P\n' 2>/dev/null | sort
 }
 
 # if the word being typed ends in "#ta", complete it from tags already used.
@@ -57,13 +68,13 @@ _notes_complete() {
 	_notes_tag_complete "$cur" && return
 
 	if [ "${COMP_WORDS[0]##*/}" = note ]; then
-		opts="-t -D -T -x -u -d -h --help"
+		opts="-t -D -T -x -u -d -g -h --help"
 		[[ "$cur" == -* ]] && mapfile -t COMPREPLY < <(compgen -W "$opts" -- "$cur")
 		return
 	fi
 
 	# notes: offer a command until one is on the line
-	opts="-s --since -u --until -t --topic -d --dir --md --tsv -h --help"
+	opts="-s --since -u --until -t --topic -d --dir -g --global --md --tsv -h --help"
 	for ((i = 1; i < COMP_CWORD; i++)); do
 		w="${COMP_WORDS[i]}"
 		case " $_NOTES_COMMANDS " in

@@ -5,6 +5,11 @@ NOTES_DATE_HELP='Date specs:
   today, yesterday, -N (N days ago), YYYY-MM-DD, or anything `date -d` reads
   ("last monday", "2 weeks ago")'
 
+NOTES_ROOT_HELP='Notes root (first that applies):
+  -d dir; else the nearest .notes/ folder in the current directory or one
+  above it (mkdir .notes to keep a project'"'"'s notes in that project); else
+  $NOTES_DIR; else ~/.notes. -g skips the project lookup (the global notes).'
+
 notes_die() {
 	printf '%s: %s\n' "${NOTES_PROG:-notes}" "$*" >&2
 	exit 1
@@ -15,9 +20,32 @@ notes_usage_error() {
 	exit 1
 }
 
+# notes_global_dir -> the notes root outside a project, and for -g
+notes_global_dir() {
+	printf '%s\n' "${NOTES_DIR:-$HOME/.notes}"
+}
+
+# notes_project_dir -> nearest .notes/ folder at or above $PWD. ~/.notes is
+# skipped: it is the global default, and must not shadow $NOTES_DIR.
+notes_project_dir() {
+	local dir="$PWD"
+	while [ -n "$dir" ]; do
+		if [ "$dir" != "$HOME" ] && [ -d "$dir/.notes" ]; then
+			printf '%s\n' "${dir%/}/.notes"
+			return 0
+		fi
+		[ "$dir" = / ] && break
+		dir="${dir%/*}"; dir="${dir:-/}" # parent, without forking dirname
+	done
+	return 1
+}
+
 # notes_root [dir] -> notes root without a trailing slash
+# order: dir argument (-d, or the global root for -g), nearest project .notes/,
+# $NOTES_DIR, ~/.notes
 notes_root() {
-	local root="${1:-${NOTES_DIR:-$HOME/notes}}"
+	local root="${1:-}"
+	[ -n "$root" ] || root="$(notes_project_dir)" || root="$(notes_global_dir)"
 	[ "$root" = / ] || root="${root%/}"
 	printf '%s\n' "$root"
 }

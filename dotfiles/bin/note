@@ -23,13 +23,16 @@ Options:
   -T HH:MM    stamp this time instead of now (24-hour; 9:30 is fine)
   -x          add as a todo: "- [ ] HH:MM text" (done later: notes done <pattern>)
   -u          undo: remove the last entry from the day's file and print it
-  -d dir      notes root instead of \$NOTES_DIR
+  -d dir      notes root (overrides the lookup below)
+  -g          global notes: skip the project .notes/ lookup (see Notes root)
   -h, --help  show this help
 
 $NOTES_DATE_HELP
 
+$NOTES_ROOT_HELP
+
 Environment:
-  NOTES_DIR   notes root (default ~/notes)
+  NOTES_DIR   notes root outside a project (default ~/.notes)
   EDITOR      editor used when no text is given (default vi; flags allowed,
               e.g. "code --wait")
 
@@ -53,7 +56,8 @@ done
 
 root="$(notes_root)"
 topic="" day="today" todo=0 undo=0 at=""
-while getopts ":t:D:T:d:xuh" opt; do
+root_opt=""
+while getopts ":t:D:T:d:gxuh" opt; do
 	case "$opt" in
 		t) topic="$OPTARG" ;;
 		D) day="$OPTARG" ;;
@@ -62,7 +66,8 @@ while getopts ":t:D:T:d:xuh" opt; do
 			[[ "$OPTARG" =~ ^([01]?[0-9]|2[0-3]):([0-5][0-9])$ ]] || notes_usage_error "-T wants a 24-hour time like 09:30 or 14:05"
 			at="$(printf '%02d:%s' "$((10#${BASH_REMATCH[1]}))" "${BASH_REMATCH[2]}")"
 			;;
-		d) root="$(notes_root "$OPTARG")" ;;
+		d) [ "$root_opt" != g ] || notes_usage_error "-d and -g don't mix"; root_opt=d; root="$(notes_root "$OPTARG")" ;;
+		g) [ "$root_opt" != d ] || notes_usage_error "-d and -g don't mix"; root_opt=g; root="$(notes_root "$(notes_global_dir)")" ;;
 		x) todo=1 ;;
 		u) undo=1 ;;
 		h) usage; exit 0 ;;

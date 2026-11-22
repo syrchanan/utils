@@ -5,7 +5,7 @@ NOTES_PROG=notes
 # shellcheck source=../lib/notes.sh
 source "$(dirname "$(readlink -f "$0")")/../lib/notes.sh"
 
-COMMANDS="today show grep topics recap tags todo done undone help"
+COMMANDS="today show grep topics recap tags todo done undone where help"
 RANGE_HELP='  -s, -u and show also take YYYY-MM, YYYY and ranges A..B
   (either side may be empty: 2026-11-01.., ..yesterday, -7..-1)'
 
@@ -25,13 +25,15 @@ Commands:
   todo [-a]         open todos with their age; -a includes done ones
   done <pattern>    mark the one open todo matching pattern as done ([x])
   undone <pattern>  reopen the one done todo matching pattern ([ ])
+  where             the notes root in use, and which rule picked it
   help [command]    this help, or help for one command
 
 Options (any command):
   -s, --since when  only notes on or after this date
   -u, --until when  only notes on or before this date
   -t, --topic path  only this topic and its sub-topics (work, work/clientA)
-  -d, --dir dir     notes root instead of \$NOTES_DIR
+  -d, --dir dir     notes root (overrides the lookup below)
+  -g, --global      global notes: skip the project .notes/ lookup (see Notes root)
       --md          plain markdown, for pasting into docs, PRs or chat
       --tsv         tab-separated output for scripts: date, topic, time,
                     state (note/todo/done), text (newlines as \\n)
@@ -40,8 +42,10 @@ Options (any command):
 $NOTES_DATE_HELP
 $RANGE_HELP
 
+$NOTES_ROOT_HELP
+
 Environment:
-  NOTES_DIR    notes root (default ~/notes)
+  NOTES_DIR    notes root outside a project (default ~/.notes)
   NO_COLOR     set to turn colors off (also off when output isn't a terminal)
   NOTES_PAGER  pager for output taller than the terminal (default 'less -RFX';
                'cat' turns paging off)
@@ -197,12 +201,28 @@ Examples:
   notes undone invoice
 EOF
 			;;
+		where) cat <<'EOF'
+notes where - the notes root in use, and why
+
+Usage: notes where [-g | -d dir]
+
+Prints the notes root on stdout and, on stderr, which rule picked it (see
+'notes --help', Notes root) and whether the folder exists yet. Only the path
+goes to stdout, so cd "$(notes where)" works.
+
+Examples:
+  notes where
+  notes where -g
+  cd "$(notes where)"
+EOF
+			;;
 		*) notes_usage_error "unknown command '$1'" ;;
 	esac
 }
 
 # --- parse args: command, positional args and options in any order ---
 root="$(notes_root)"
+root_opt=""
 cmd="" since="" until="" topic="" tsv=0 md=0 n="" all=0 help=0 line_ref=""
 args=()
 need() { [ $# -ge 2 ] || notes_usage_error "$1 needs a value"; }
@@ -212,7 +232,8 @@ while [ $# -gt 0 ]; do
 		-s | --since) need "$@"; since="$2"; shift ;;
 		-u | --until) need "$@"; until="$2"; shift ;;
 		-t | --topic) need "$@"; topic="$2"; shift ;;
-		-d | --dir) need "$@"; root="$(notes_root "$2")"; shift ;;
+		-d | --dir) need "$@"; [ "$root_opt" != g ] || notes_usage_error "-d and -g don't mix"; root_opt=d; root="$(notes_root "$2")"; shift ;;
+		-g | --global) [ "$root_opt" != d ] || notes_usage_error "-d and -g don't mix"; root_opt=g; root="$(notes_root "$(notes_global_dir)")" ;;
 		-n) need "$@"; n="$2"; shift ;;
 		-a | --all) all=1 ;;
 		--line) need "$@"; line_ref="$2"; shift ;;
@@ -259,6 +280,23 @@ case "$cmd" in
 	*) [ "$nargs" -eq 0 ] || notes_usage_error "$cmd takes no arguments (got '${args[0]}')" ;;
 esac
 [ -z "$line_ref" ] || [ "$cmd" = done ] || [ "$cmd" = undone ] || notes_usage_error "--line only works with done/undone"
+
+if [ "$cmd" = where ]; then
+	case "$root_opt" in
+		d) why="-d" ;;
+		g) if [ -n "${NOTES_DIR:-}" ]; then why="-g (\$NOTES_DIR)"; else why="-g (default ~/.notes)"; fi ;;
+		*)
+			if [ "$root" = "$(notes_project_dir || true)" ]; then why="project .notes/ (nearest to $PWD)"
+			elif [ -n "${NOTES_DIR:-}" ]; then why="\$NOTES_DIR (no project .notes/ found)"
+			else why="default ~/.notes (no project .notes/ found, \$NOTES_DIR unset)"
+			fi
+			;;
+	esac
+	printf '%s\n' "$root"
+	[ -d "$root" ] || why="$why; doesn't exist yet ('note' creates it)"
+	printf 'from: %s\n' "$why" >&2
+	exit 0
+fi
 
 # set_box FILE LINE: done flips "- [ ]" to "- [x]", undone flips it back
 set_box() {

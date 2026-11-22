@@ -10,7 +10,7 @@
 # export NO_PROXY="localhost,127.0.0.1"
 
 # --- dotfiles settings ---
-# export NOTES_DIR="$HOME/notes"      # where `note` writes
+# export NOTES_DIR="$HOME/.notes"     # global notes (projects use their own .notes/)
 # export DOTFILES_AUTOVENV=0          # turn off venv auto-activate on this machine
 
 # --- secrets ---

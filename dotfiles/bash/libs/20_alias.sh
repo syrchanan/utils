@@ -10,7 +10,7 @@ reload="source ~/.bashrc" \
 hg="history | grep -i" \
 psg="ps aux | grep -v grep | grep -i" \
 df="df -h" \
-du="du -h -d 1"
+dud="du -h -d 1"
 
 # OS guards: only define aliases whose commands exist here
 command -v sudo >/dev/null 2>&1 && alias resu='sudo $(fc -ln -1)'

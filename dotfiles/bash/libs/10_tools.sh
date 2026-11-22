@@ -1,5 +1,5 @@
-# show a command's --help output
-help() {
+# show a command's --help output (hh, not help: that is a bash builtin)
+hh() {
 	"$@" --help 2>&1
 }
 
