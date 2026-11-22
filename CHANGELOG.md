@@ -4,12 +4,9 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-### Added
-- `.github/CODEOWNERS`: @syrchanan owns everything, so they're requested as reviewer on every PR.
-
 ## [0.4.3] - 2026-11-21
 ### Added
+- `.github/CODEOWNERS`: @syrchanan owns everything, so they're requested as reviewer on every PR.
 - `dotfiles/lib/notes.sh`: project notes. `note` and `notes` use the nearest `.notes/` folder in the current directory or one above it as the notes root, ahead of `$NOTES_DIR` (`-d` still wins), so `mkdir .notes` keeps a project's notes in that project. The `gi` templates don't ignore `.notes/`, so project notes can be committed and shared.
 - `dotfiles/bin/note`, `dotfiles/bin/notes`: `-g` (`notes`: also `--global`) skips the project lookup and uses the global notes; it can't be combined with `-d`.
 - `dotfiles/bash/libs/40_complete.sh`: topic and tag completion follow the project lookup and `-g`.
