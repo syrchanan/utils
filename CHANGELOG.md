@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-11-21
+### Added
+- `dotfiles/lib/notes.sh`: project notes. `note` and `notes` use the nearest `.notes/` folder in the current directory or one above it as the notes root, ahead of `$NOTES_DIR` (`-d` still wins), so `mkdir .notes` keeps a project's notes in that project. The `gi` templates don't ignore `.notes/`, so project notes can be committed and shared.
+- `dotfiles/bin/note`, `dotfiles/bin/notes`: `-g` (`notes`: also `--global`) skips the project lookup and uses the global notes; it can't be combined with `-d`.
+- `dotfiles/bash/libs/40_complete.sh`: topic and tag completion follow the project lookup and `-g`.
+- `dotfiles/bin/notes`: `where` prints the notes root in use on stdout (so `cd "$(notes where)"` works) and, on stderr, which rule picked it and whether it exists yet.
+- `dotfiles/bin/gclean`: the dry run shows each branch's last commit and whether it's merged into main/master, since `--yes` force-deletes unmerged branches too.
+- `dotfiles/bin/tolf`: `--` ends options; paths starting with `-` work.
+
+### Changed
+- `dotfiles/bash/libs/20_alias.sh`: **breaking:** the `du` alias is now `dud`; `du -h -d 1` made `du -sh` fail ("summarizing conflicts with --max-depth=1").
+- `dotfiles/bash/libs/10_tools.sh`: **breaking:** `help()` is now `hh()`; it shadowed the bash builtin, so `help`, `help for` and `help if` broke.
+- `dotfiles/bin/tolf`: unknown options are an error instead of being taken as paths.
+- `dotfiles/bash/libs/30_env.sh`, `dotfiles/lib/notes.sh`, `dotfiles/bash/libs/40_complete.sh`: parent-directory lookups use parameter expansion instead of `dirname`, so the venv check no longer forks once per folder level on every prompt (slow under WSL's `/mnt/c`).
+- `dotfiles/lib/notes.sh`: **breaking:** the default global notes folder is now `~/.notes` (was `~/notes`), matching project `.notes/` folders. Move existing notes with `mv ~/notes ~/.notes`, or keep them where they are with `export NOTES_DIR=~/notes`.
+- `dotfiles/bash/libs/40_complete.sh`: topic completion skips hidden folders inside the notes root.
+- `dotfiles/bin/note`, `dotfiles/bin/notes`: `--help` explains how the notes root is chosen.
+- `dotfiles/bash/.bashrc.local.example`: `NOTES_DIR` example points at `~/.notes`.
+- `dotfiles/README.md`: documented the above.
+
+### Fixed
+- `dotfiles/bin/tolf`: found no CRLF files under Git Bash, whose grep strips the CR before matching (now `grep -U`); a lone CR not followed by a newline no longer marks a file as needing conversion.
+
 ## [0.4.2] - 2026-11-21
 ### Added
 - `dotfiles/bash/libs/10_tools.sh`: `dotfiles list [regex]` lists every script in `bin/` (with the description from its header comment), every alias and function from `bash/libs/` and `~/.bashrc.local` (aliases show their current value, or that they are not set in this shell), filtered by a regex on name or description (smart case). `dotfiles -h` / `--help` prints usage.

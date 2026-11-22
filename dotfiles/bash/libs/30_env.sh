@@ -14,7 +14,7 @@ _autovenv_find() {
 			return 0
 		fi
 		[ "$dir" = "/" ] && break
-		dir="$(dirname "$dir")"
+		dir="${dir%/*}"; dir="${dir:-/}" # parent, without forking dirname
 	done
 	return 1
 }

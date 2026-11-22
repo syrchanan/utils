@@ -4,26 +4,34 @@ set -euo pipefail
 
 YES=0
 paths=()
+opts=1
 for arg in "$@"; do
-	case "$arg" in
-		--yes|-y) YES=1 ;;
-		-h|--help)
-			cat <<EOF
-Usage: tolf [--yes] [path...]
+	if [ "$opts" -eq 1 ]; then
+		case "$arg" in
+			--) opts=0; continue ;;
+			--yes|-y) YES=1; continue ;;
+			-h|--help)
+				cat <<EOF
+Usage: tolf [--yes] [--] [path...]
 Lists text files containing CRLF under each path (default: .), skipping .git
-and binary files. With --yes, converts them to LF in place.
+and binary files. With --yes, converts them to LF in place. A lone CR that
+isn't followed by a newline is left alone, and such files aren't listed.
 EOF
-			exit 0
-			;;
-		*) paths+=("$arg") ;;
-	esac
+				exit 0
+				;;
+			-?*) echo "tolf: unknown option $arg (use -- before paths that start with -)" >&2; exit 1 ;;
+		esac
+	fi
+	# find reads a leading '-' as an expression, so anchor such paths
+	case "$arg" in -*) arg="./$arg" ;; esac
+	paths+=("$arg")
 done
 [ "${#paths[@]}" -eq 0 ] && paths=(.)
 
 count=0
 while IFS= read -r -d '' f; do
 	grep -Iq . "$f" || continue        # binary or empty
-	grep -q $'\r' "$f" || continue     # already LF
+	grep -Uq $'\r$' "$f" || continue   # no CRLF line endings (-U: Git Bash grep strips CR otherwise)
 	count=$((count + 1))
 	if [ "$YES" -eq 1 ]; then
 		sed -i 's/\r$//' "$f"

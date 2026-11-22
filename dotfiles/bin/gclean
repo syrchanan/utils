@@ -11,7 +11,9 @@ for arg in "$@"; do
 Usage: gclean [--yes]
 Fetches with --prune, then finds local branches whose upstream is gone.
 Removes their worktrees (skipping dirty ones) and deletes the branches.
-Never touches the current branch or main/master. Dry run unless --yes.
+Never touches the current branch or main/master. Dry run unless --yes; it
+shows each branch's last commit and whether it is merged into main/master
+(squash merges show as not merged, so check those before --yes).
 EOF
 			exit 0
 			;;
@@ -23,6 +25,12 @@ git rev-parse --git-dir >/dev/null
 git fetch --prune --quiet
 
 current="$(git symbolic-ref --quiet --short HEAD || true)"
+
+# branch to check merges against: main, else master (local or remote)
+base=""
+for b in main master origin/main origin/master; do
+	if git rev-parse --verify --quiet "$b^{commit}" >/dev/null; then base="$b"; break; fi
+done
 
 gone=()
 while IFS=$'\t' read -r branch track; do
@@ -51,7 +59,14 @@ else
 		wt="${wt_of[$branch]:-}"
 		if [ "$YES" -eq 0 ]; then
 			[ -n "$wt" ] && echo "would remove worktree $wt"
-			echo "would delete branch $branch"
+			# the remote is gone, so -D deletes even unmerged work: show what goes
+			last="$(git log -1 --format='%h %s (%cr)' "$branch")"
+			if [ -n "$base" ] && git merge-base --is-ancestor "$branch" "$base"; then
+				merged="merged into $base"
+			else
+				merged="NOT merged into ${base:-main/master} (squash-merged, or unmerged work)"
+			fi
+			echo "would delete branch $branch: $last; $merged"
 			continue
 		fi
 		if [ -n "$wt" ]; then
