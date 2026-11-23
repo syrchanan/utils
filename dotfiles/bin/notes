@@ -5,7 +5,7 @@ NOTES_PROG=notes
 # shellcheck source=../lib/notes.sh
 source "$(dirname "$(readlink -f "$0")")/../lib/notes.sh"
 
-COMMANDS="today show grep topics recap tags todo done undone where help"
+COMMANDS="today show grep topics recap tags todo done undone edit where help"
 RANGE_HELP='  -s, -u and show also take YYYY-MM, YYYY and ranges A..B
   (either side may be empty: 2026-11-01.., ..yesterday, -7..-1)'
 
@@ -25,6 +25,7 @@ Commands:
   todo [-a]         open todos with their age; -a includes done ones
   done <pattern>    mark the one open todo matching pattern as done ([x])
   undone <pattern>  reopen the one done todo matching pattern ([ ])
+  edit <pattern>    open the one note matching pattern in your editor
   where             the notes root in use, and which rule picked it
   help [command]    this help, or help for one command
 
@@ -49,6 +50,8 @@ Environment:
   NO_COLOR     set to turn colors off (also off when output isn't a terminal)
   NOTES_PAGER  pager for output taller than the terminal (default 'less -RFX';
                'cat' turns paging off)
+  VISUAL, EDITOR
+               editor for 'edit', first one set (default vim, else vi)
 
 Exits 1 when nothing matches. Write notes with 'note'.
 
@@ -60,6 +63,7 @@ Examples:
   notes grep 'deploy|rollback' -s -30
   notes todo
   notes done invoice
+  notes edit 'login redirect'
   notes recap -n 7 --md > week.md
   notes grep '#bug' --tsv | cut -f1,5
 EOF
@@ -201,6 +205,31 @@ Examples:
   notes undone invoice
 EOF
 			;;
+		edit) cat <<'EOF'
+notes edit - open a note in your editor
+
+Usage: notes edit <pattern> [-t topic] [-s since] [-u until]
+       notes edit --line <file:line>
+
+Finds notes and todos whose text matches pattern (same rules as 'notes grep':
+regex, smart case, whole multi-line note) and opens that day's file at the
+note. Exactly one must match: if several do, they're listed with file:line
+and nothing opens; narrow the pattern, add -t/-s/-u, or pass --line. For the
+note you just wrote, 'note -e' is shorter.
+
+Editor: $VISUAL, then $EDITOR, then vim, then vi. vi, vim, nvim, nano, emacs
+and micro open at the note's line; other editors open the file.
+
+Options:
+  --line file:line  open this exact spot; file is relative to the notes root,
+                    as listed (e.g. work/2026-11-20.md:3)
+
+Examples:
+  notes edit 'login redirect'
+  notes edit deploy -t work -s -7
+  notes edit --line work/2026-11-20.md:3
+EOF
+			;;
 		where) cat <<'EOF'
 notes where - the notes root in use, and why
 
@@ -270,7 +299,7 @@ nargs=${#args[@]}
 case "$cmd" in
 	show) [ "$nargs" -le 1 ] || notes_usage_error "show takes one date or range" ;;
 	grep) [ "$nargs" -eq 1 ] && [ -n "${args[0]}" ] || notes_usage_error "grep needs one pattern" ;;
-	done | undone)
+	done | undone | edit)
 		if [ -n "$line_ref" ]; then
 			[ "$nargs" -eq 0 ] || notes_usage_error "give $cmd a pattern or --line, not both"
 		else
@@ -279,7 +308,7 @@ case "$cmd" in
 		;;
 	*) [ "$nargs" -eq 0 ] || notes_usage_error "$cmd takes no arguments (got '${args[0]}')" ;;
 esac
-[ -z "$line_ref" ] || [ "$cmd" = done ] || [ "$cmd" = undone ] || notes_usage_error "--line only works with done/undone"
+case "$cmd" in done | undone | edit) ;; *) [ -z "$line_ref" ] || notes_usage_error "--line only works with done/undone/edit" ;; esac
 
 if [ "$cmd" = where ]; then
 	case "$root_opt" in
@@ -323,6 +352,7 @@ if [ -n "$line_ref" ]; then
 	[[ "$line_ref" =~ ^(.+):([1-9][0-9]*)$ ]] || notes_usage_error "--line wants file:line, e.g. work/2026-11-20.md:3"
 	f="$root/${BASH_REMATCH[1]}"
 	[ -f "$f" ] || notes_die "no such notes file: ${BASH_REMATCH[1]}"
+	if [ "$cmd" = edit ]; then run_editor "$f" "${BASH_REMATCH[2]}"; exit; fi
 	set_box "$f" "${BASH_REMATCH[2]}"
 	exit 0
 fi
@@ -360,7 +390,7 @@ fi
 
 pat="" icase=0 want=""
 case "$cmd" in
-	grep | done | undone)
+	grep | done | undone | edit)
 		pat="${args[0]}"
 		[[ "$pat" =~ [A-Z] ]] || icase=1
 		;;
@@ -370,9 +400,9 @@ case "$cmd" in
 	done) want=todo ;;
 	undone) want=doneonly ;;
 esac
-# done/undone also need each entry's file and first line
+# done/undone/edit also need each entry's file and first line
 loc=0
-if [ "$cmd" = done ] || [ "$cmd" = undone ]; then loc=1; fi
+case "$cmd" in done | undone | edit) loc=1 ;; esac
 color=0
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "$md" = 0 ]; then color=1; fi
 today="$(date +%F)"
@@ -456,24 +486,29 @@ if [ -z "$records" ]; then
 			;;
 		done) echo "notes: no open todo$where matches '$pat' (see: notes todo)" >&2 ;;
 		undone) echo "notes: no done todo$where matches '$pat' (see: notes todo -a)" >&2 ;;
+		edit) echo "notes: no note$where matches '$pat' (searched $span)" >&2 ;;
 		*) echo "notes: no notes$where $span" >&2 ;;
 	esac
 	exit 1
 fi
 
-# --- done / undone: change exactly one match, or list them ---
+# --- done / undone / edit: act on exactly one match, or list them ---
 if [ "$loc" = 1 ]; then
 	# last two fields are file and line (split by hand: read would merge empty fields)
 	hit_loc() { ln="${1##*"$TAB"}"; f="${1%"$TAB"*}"; f="${f##*"$TAB"}"; }
 	mapfile -t hits <<<"$records"
 	if [ "${#hits[@]}" -eq 1 ]; then
 		hit_loc "${hits[0]}"
+		if [ "$cmd" = edit ]; then run_editor "$f" "$ln"; exit; fi
 		set_box "$f" "$ln"
 		exit 0
 	fi
-	what="open"
-	[ "$cmd" = undone ] && what="done"
-	echo "notes: ${#hits[@]} $what todos match '$pat'; nothing changed. Narrow the pattern, add -t/-s/-u, or pick one:" >&2
+	case "$cmd" in
+		done) what="open todos" none=changed ;;
+		undone) what="done todos" none=changed ;;
+		*) what="notes" none=opened ;;
+	esac
+	echo "notes: ${#hits[@]} $what match '$pat'; nothing $none. Narrow the pattern, add -t/-s/-u, or pick one:" >&2
 	for h in "${hits[@]}"; do
 		hit_loc "$h"
 		d="${h%%"$TAB"*}"

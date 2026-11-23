@@ -38,8 +38,8 @@ every step is idempotent and backs up anything it would replace; uninstall leave
 | `gclean [--yes]` | delete local branches whose remote is gone, and their worktrees (dirty worktrees are kept); the dry run shows each branch's last commit and whether it's merged |
 | `tolf [--yes] [--] [path...]` | convert CRLF to LF, recursively; skips `.git` and binary files |
 | `gi [-l] [--stdout] [name...]` | append `.gitignore` templates (default: python r julia node quarto); safe to rerun |
-| `note [-t topic] [-D when] [-T HH:MM] [-x] [-u] [text]` | append a timestamped note to `<root>/[topic/]YYYY-MM-DD.md` (see notes root below); topics nest (`work/clientA`); `-x` todo, `-D` another day, `-T` set the time, `-u` undo last; no text opens `$EDITOR` |
-| `notes [command] [-s/-u when] [-t topic] [--md\|--tsv]` | read notes: `today` (default), `show <when>`, `grep <pattern>`, `topics`, `recap [-n N]`, `tags`, `todo [-a]` (with ages), `done`/`undone <pattern>` (tick a todo's box), `where` (the notes root in use, and why), `help [command]`; long output pages through `less` (`NOTES_PAGER`) |
+| `note [-t topic] [-D when] [-T HH:MM] [-x] [-u\|-e] [text]` | append a timestamped note to `<root>/[topic/]YYYY-MM-DD.md` (see notes root below); topics nest (`work/clientA`); `-x` todo, `-D` another day, `-T` set the time, `-u` undo last, `-e` edit last (opens the editor at it); no text opens the day's file; editor is `$VISUAL`, else `$EDITOR`, else `vim`, else `vi` |
+| `notes [command] [-s/-u when] [-t topic] [--md\|--tsv]` | read notes: `today` (default), `show <when>`, `grep <pattern>`, `topics`, `recap [-n N]`, `tags`, `todo [-a]` (with ages), `done`/`undone <pattern>` (tick a todo's box), `edit <pattern>` (open a note in the editor), `where` (the notes root in use, and why), `help [command]`; long output pages through `less` (`NOTES_PAGER`) |
 | `mkvenv` | `uv venv`, then `uv sync` or `uv pip install -r requirements.txt` |
 
 `gclean` and `tolf` are dry runs unless given `--yes`.

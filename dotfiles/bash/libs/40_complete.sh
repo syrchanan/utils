@@ -1,6 +1,6 @@
 # tab completion for bin/ scripts and the dotfiles command
 
-_NOTES_COMMANDS="today show grep topics recap tags todo done undone where help"
+_NOTES_COMMANDS="today show grep topics recap tags todo done undone edit where help"
 
 # notes root, honoring -d/--dir or -g/--global earlier on the line, then the
 # nearest project .notes/ (same order as notes_root in lib/notes.sh)
@@ -68,7 +68,7 @@ _notes_complete() {
 	_notes_tag_complete "$cur" && return
 
 	if [ "${COMP_WORDS[0]##*/}" = note ]; then
-		opts="-t -D -T -x -u -d -g -h --help"
+		opts="-t -D -T -x -u -e -d -g -h --help"
 		[[ "$cur" == -* ]] && mapfile -t COMPREPLY < <(compgen -W "$opts" -- "$cur")
 		return
 	fi
@@ -86,7 +86,7 @@ _notes_complete() {
 						;;
 					recap) opts="$opts -n" ;;
 					todo) opts="$opts -a --all" ;;
-					done | undone) opts="$opts --line" ;;
+					done | undone | edit) opts="$opts --line" ;;
 				esac
 				[[ "$cur" == -* ]] && mapfile -t COMPREPLY < <(compgen -W "$opts" -- "$cur")
 				return
