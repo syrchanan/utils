@@ -107,3 +107,19 @@ validate_topic() {
 		esac
 	done
 }
+
+# run_editor FILE [LINE]: like git, the editor may carry flags or quotes
+# ("code --wait"): $VISUAL, then $EDITOR, then vim, then vi
+run_editor() {
+	local ed="${VISUAL:-${EDITOR:-}}" goto=()
+	if [ -z "$ed" ]; then
+		if command -v vim >/dev/null 2>&1; then ed=vim; else ed=vi; fi
+	fi
+	# +N (jump to line) is understood by these; others just open the file
+	if [ -n "${2:-}" ]; then
+		case "$(basename -- "${ed%% *}")" in
+			vi | vim | nvim | view | nano | emacs | micro) goto=("+$2") ;;
+		esac
+	fi
+	sh -c "$ed \"\$@\"" editor "${goto[@]}" "$1"
+}

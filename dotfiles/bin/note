@@ -13,7 +13,7 @@ Usage: note [options] [text...]
 
 Writes "- HH:MM text" to \$NOTES_DIR/[topic/]YYYY-MM-DD.md. Text can also be
 piped in; multi-line text is nested under the timestamp. With no text, opens
-the day's file in \$EDITOR (a new file left empty is removed again). Quote
+the day's file in your editor (a new file left empty is removed again). Quote
 text that has #tags: unquoted, the shell treats '#' as a comment. Read,
 search and summarize notes with 'notes'.
 
@@ -23,6 +23,8 @@ Options:
   -T HH:MM    stamp this time instead of now (24-hour; 9:30 is fine)
   -x          add as a todo: "- [ ] HH:MM text" (done later: notes done <pattern>)
   -u          undo: remove the last entry from the day's file and print it
+  -e          edit: open the day's file in your editor at its last entry
+              (older notes: notes edit <pattern>)
   -d dir      notes root (overrides the lookup below)
   -g          global notes: skip the project .notes/ lookup (see Notes root)
   -h, --help  show this help
@@ -33,8 +35,9 @@ $NOTES_ROOT_HELP
 
 Environment:
   NOTES_DIR   notes root outside a project (default ~/.notes)
-  EDITOR      editor used when no text is given (default vi; flags allowed,
-              e.g. "code --wait")
+  VISUAL, EDITOR
+              editor for -e and when no text is given, first one set (default
+              vim, else vi; flags allowed, e.g. "code --wait")
 
 Examples:
   note "fixed the login redirect #bug"
@@ -43,6 +46,7 @@ Examples:
   note -D yesterday -T 16:45 "forgot to log the deploy"
   git log --oneline -5 | note -t work
   note -u                          # remove the note you just added
+  note -e -t work                  # fix the last work note
 EOF
 }
 
@@ -55,9 +59,9 @@ for arg in "$@"; do
 done
 
 root="$(notes_root)"
-topic="" day="today" todo=0 undo=0 at=""
+topic="" day="today" todo=0 undo=0 edit=0 at=""
 root_opt=""
-while getopts ":t:D:T:d:gxuh" opt; do
+while getopts ":t:D:T:d:gxueh" opt; do
 	case "$opt" in
 		t) topic="$OPTARG" ;;
 		D) day="$OPTARG" ;;
@@ -70,6 +74,7 @@ while getopts ":t:D:T:d:gxuh" opt; do
 		g) [ "$root_opt" != d ] || notes_usage_error "-d and -g don't mix"; root_opt=g; root="$(notes_root "$(notes_global_dir)")" ;;
 		x) todo=1 ;;
 		u) undo=1 ;;
+		e) edit=1 ;;
 		h) usage; exit 0 ;;
 		:) notes_usage_error "-$OPTARG needs a value" ;;
 		*) notes_usage_error "unknown option -$OPTARG" ;;
@@ -87,13 +92,19 @@ file="$dir/$date_str.md"
 rel="${file#"$root"/}"
 text="$*"
 
-if [ "$undo" = 1 ]; then
-	[ -z "$text" ] || notes_usage_error "-u takes no text"
-	[ "$todo" = 0 ] || notes_usage_error "-u and -x don't mix"
-	[ -z "$at" ] || notes_usage_error "-u and -T don't mix"
-	[ -f "$file" ] || notes_die "nothing to undo: $rel does not exist"
+[ "$undo" = 0 ] || [ "$edit" = 0 ] || notes_usage_error "-u and -e don't mix"
+if [ "$undo" = 1 ] || [ "$edit" = 1 ]; then
+	if [ "$undo" = 1 ]; then flag=-u what=undo; else flag=-e what=edit; fi
+	[ -z "$text" ] || notes_usage_error "$flag takes no text"
+	[ "$todo" = 0 ] || notes_usage_error "$flag and -x don't mix"
+	[ -z "$at" ] || notes_usage_error "$flag and -T don't mix"
+	[ -f "$file" ] || notes_die "nothing to $what: $rel does not exist"
 	start="$(awk '/^- /{n=NR} END{print n+0}' "$file")"
-	[ "$start" -gt 0 ] || notes_die "nothing to undo: no entries in $rel"
+	[ "$start" -gt 0 ] || notes_die "nothing to $what: no entries in $rel"
+	if [ "$edit" = 1 ]; then
+		run_editor "$file" "$start"
+		exit
+	fi
 	tail -n +"$start" "$file"
 	sed -i "${start},\$d" "$file"
 	echo "undone -> $rel"
@@ -116,8 +127,7 @@ fi
 if [ -z "$text" ]; then
 	[ -z "$at" ] || notes_usage_error "-T needs note text"
 	status=0
-	# like git: EDITOR may carry flags or quotes, e.g. "code --wait"
-	sh -c "${EDITOR:-vi} \"\$@\"" editor "$file" || status=$?
+	run_editor "$file" || status=$?
 	# opened just to look, or quit without writing: don't leave a header-only file behind
 	if [ "$created" = 1 ] && [ "$(tr -d '[:space:]' <"$file")" = "$(printf '%s' "$header" | tr -d '[:space:]')" ]; then
 		rm -f "$file"

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file (via AI, min
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-11-23
+### Added
+- `dotfiles/bin/notes`: `edit <pattern>` opens the one note matching pattern (any note or todo; same matching and `-t`/`-s`/`-u` filters as `done`) in the editor at its line; several matches are listed with `file:line` and nothing opens. `edit --line file:line` opens an exact spot.
+- `dotfiles/bin/note`: `-e` opens the day's file (honoring `-t`/`-D`) in the editor at its last entry; vi, vim, nvim, nano, emacs and micro jump to the line, other editors just open the file.
+- `dotfiles/bash/libs/40_complete.sh`: completes `note -e` and `notes edit` (with `--line`).
+
+### Changed
+- `dotfiles/bin/note`, `dotfiles/bin/notes`: the editor is `$VISUAL`, then `$EDITOR`, then `vim`, then `vi` (was `$EDITOR`, then `vi`). The shared logic lives in `dotfiles/lib/notes.sh`.
+- `dotfiles/README.md`: documented the above.
+
 ## [0.4.3] - 2026-11-21
 ### Added
 - `.github/CODEOWNERS`: @syrchanan owns everything, so they're requested as reviewer on every PR.
